@@ -1,0 +1,14 @@
+# Игнорируем все папки target
+target/
+
+# Исключаем maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# Игнорируем файлы конфигурации IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Игнорируем файлы Mac OS
+.DS_Store
