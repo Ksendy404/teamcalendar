@@ -1,0 +1,6 @@
+yandex:
+  caldav:
+    url: https://caldav.yandex.ru/
+    username: callcalendar
+    password: qjwmrfffpsxlskou
+    calendar: personal # или другой календарь
