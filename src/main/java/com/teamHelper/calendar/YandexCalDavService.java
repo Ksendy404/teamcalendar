@@ -1,7 +1,8 @@
 package com.teamHelper.calendar;
 
+import com.teamHelper.config.HttpPropfind;
 import com.teamHelper.config.HttpReport;
-import com.teamHelper.pojo.CalendarEvent;
+import com.teamHelper.model.CalendarEvent;
 import jakarta.annotation.PreDestroy;
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.model.Calendar;
@@ -18,6 +19,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
@@ -53,6 +55,9 @@ public class YandexCalDavService {
     private final CloseableHttpClient client;
     private ZoneId zoneId;
 
+    @Autowired
+    private CalendarQueryBuilder calendarQueryBuilder;
+
     public YandexCalDavService(
             @Value("${yandex.caldav.url}") String caldavUrl,
             @Value("${yandex.caldav.username}") String username,
@@ -72,26 +77,24 @@ public class YandexCalDavService {
     public List<CalendarEvent> getUpcomingEvents() throws Exception {
         try {
             LocalDateTime start = LocalDate.now().atTime(9, 0);
-            LocalDateTime end = LocalDate.now().atTime(20, 0);
+            LocalDateTime end = LocalDate.now().atTime(22, 0);   //TODO для отладки
 
             String calendarUrl = caldavUrl.endsWith("/") ? caldavUrl : caldavUrl + "/";
 
             // 2. Создаем REPORT запрос
             HttpReport request = new HttpReport(URI.create(calendarUrl));
 
-            // 3. Устанавливаем заголовки
             request.setHeader("Depth", "1");
             request.setHeader("Content-Type", "text/xml; charset=utf-8");
             request.setHeader("Prefer", "return-minimal");
 
-            // 4. Формируем тело запроса
-            String xmlBody = buildCalendarQuery(start, end);
+            String xmlBody = calendarQueryBuilder.buildCalendarQuery(start, end);
 
             request.setEntity(new StringEntity(xmlBody, StandardCharsets.UTF_8));
 
             log.debug("Sending CalDAV REPORT request:\n{}", xmlBody);
 
-            // 5. Выполняем запрос
+            // 3. Выполняем запрос
             try (CloseableHttpResponse response = client.execute(request)) {
                 String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
 
@@ -110,40 +113,6 @@ public class YandexCalDavService {
             log.error("Failed to get upcoming events", e);
             throw new RuntimeException("Failed to fetch calendar events", e);
         }
-    }
-
-    /**
-     * Строит CalDAV запрос для указанного временного диапазона
-     */
-    private String buildCalendarQuery(LocalDateTime start, LocalDateTime end) {
-        return """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-                  <d:prop>
-                    <d:getetag/>
-                    <c:calendar-data/>
-                  </d:prop>
-                  <c:filter>
-                    <c:comp-filter name="VCALENDAR">
-                      <c:comp-filter name="VEVENT">
-                        <c:time-range start="%s" end="%s"/>
-                      </c:comp-filter>
-                    </c:comp-filter>
-                  </c:filter>
-                </c:calendar-query>
-                """.formatted(
-                formatIcalTime(start),
-                formatIcalTime(end)
-        );
-    }
-
-    /**
-     * Форматирует LocalDateTime в iCalendar формат (UTC)
-     */
-    private String formatIcalTime(LocalDateTime dateTime) {
-        return dateTime.atZone(zoneId)
-                .withZoneSameInstant(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"));
     }
 
     private List<CalendarEvent> parseEvents(InputStream icalStream) throws Exception {
@@ -261,12 +230,31 @@ public class YandexCalDavService {
         client.close();
     }
 
+    public void testCalDavConnection() throws Exception {
+        log.info("Testing CalDAV connection to {}", caldavUrl);
 
-    public String testCalDavConnection() throws Exception {
+        // 1. Создаем простой PROPFIND запрос (стандартный для CalDAV)
+        HttpPropfind request = new HttpPropfind(URI.create(caldavUrl));
+        request.setHeader("Depth", "0"); // Только для указанного URL
 
-        List<CalendarEvent> fff = getUpcomingEvents();
+        // 2. Отправляем запрос
+        try (CloseableHttpResponse response = client.execute(request)) {
+            int statusCode = response.getStatusLine().getStatusCode();
 
-        System.out.println("fg");
-        return "1";
+            // 3. Проверяем код ответа
+            if (statusCode == 207) { // 207 Multi-Status - ожидаемый ответ для PROPFIND
+                log.debug("CalDAV connection test successful (HTTP 207)");
+                return;
+            }
+
+            // 4. Обрабатываем ошибки
+            String responseBody = EntityUtils.toString(response.getEntity());
+            throw new RuntimeException(
+                    "CalDAV test failed. Status: " + statusCode +
+                            ", Response: " + responseBody
+            );
+        } catch (IOException e) {
+            throw new RuntimeException("CalDAV connection error: " + e.getMessage(), e);
+        }
     }
 }

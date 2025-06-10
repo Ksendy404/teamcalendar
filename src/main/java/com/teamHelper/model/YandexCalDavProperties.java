@@ -1,4 +1,4 @@
-package com.teamHelper.pojo;
+package com.teamHelper.model;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

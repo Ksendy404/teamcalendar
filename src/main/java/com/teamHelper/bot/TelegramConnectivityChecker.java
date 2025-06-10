@@ -14,6 +14,6 @@ public class TelegramConnectivityChecker {
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         int code = connection.getResponseCode();
-        System.out.println("📡 Проверка соединения с Telegram API: " + (code == 200 ? "OK" : "FAIL"));
+        System.out.println("Проверка соединения с Telegram: " + (code == 200 ? "OK" : "FAIL"));
     }
 }

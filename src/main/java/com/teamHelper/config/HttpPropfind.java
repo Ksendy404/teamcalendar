@@ -15,7 +15,6 @@ public class HttpPropfind extends HttpEntityEnclosingRequestBase {
         super();
         setURI(uri);
     }
-
     @Override
     public String getMethod() {
         return METHOD_NAME;

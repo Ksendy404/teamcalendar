@@ -1,7 +1,7 @@
 package com.teamHelper.bot;
 
-import com.teamHelper.calendar.YandexCalDavService;
-import com.teamHelper.pojo.CalendarEvent;
+import com.teamHelper.model.CalendarEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -13,6 +13,10 @@ import java.time.format.DateTimeFormatter;
 
 @Component
 public class BotComponent extends TelegramLongPollingBot {
+
+    @Autowired
+    private MessageBuilder messageBuilder;
+
     @Value("${telegram.bot.username}")
     private String botUsername;
 
@@ -20,7 +24,7 @@ public class BotComponent extends TelegramLongPollingBot {
     private String botToken;
 
     @Value("${telegram.admin.chatId}")
-    private String adminChatId; // ID чата для ошибок
+    private String adminChatId;
 
     @Value("${telegram.notification.chatId}")
     private String notificationChatId;
@@ -28,7 +32,6 @@ public class BotComponent extends TelegramLongPollingBot {
     @Value("${telegram.error.chatId}")
     private String errorChatID;
 
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     public BotComponent(@Value("${telegram.bot.token}") String botToken) {
         super(botToken);
         System.out.println("🟢 Бот инициализирован. Токен: " + botToken.substring(0, 6) + "...");
@@ -46,10 +49,10 @@ public class BotComponent extends TelegramLongPollingBot {
         }
     }
 
-    // Отправка сообщения об ошибке администратору
+    // Отправка сообщения об ошибке администраторам
     public void sendErrorMessage(String errorText) {
         SendMessage message = new SendMessage();
-        message.setChatId(notificationChatId); // Отправляем в указанный чат
+        message.setChatId(errorChatID);
         message.setText("❌ Ошибка: " + errorText);
         try {
             execute(message);
@@ -62,7 +65,7 @@ public class BotComponent extends TelegramLongPollingBot {
     public void sendCalendarNotification(CalendarEvent event) {
         SendMessage message = new SendMessage();
         message.setChatId(notificationChatId); // Отправляем в указанный чат
-        message.setText(buildEventMessage(event));
+        message.setText(messageBuilder.buildEventMessage(event));
         message.setParseMode("MarkdownV2");
         try {
             execute(message);
@@ -71,41 +74,27 @@ public class BotComponent extends TelegramLongPollingBot {
         }
     }
 
-    // Форматирование сообщения о событии
-    private String buildEventMessage(CalendarEvent event) {
-        return String.format(
-                "🔔 *Напоминание о событии*\n\n" +
-                        "*Название\\:* %s\n" +
-                        "*Время\\:* `%s` \\- `%s`\n" +
-                        "%s" +
-                        "%s",
-                escapeMarkdownV2(event.getTitle()),
-                escapeMarkdownV2(event.getStart().format(DATE_FORMAT)),
-                escapeMarkdownV2(event.getEnd().format(DATE_FORMAT)),
-                event.getDescription() != null ? "*Описание\\:* " + escapeMarkdownV2(event.getDescription()) + "\n" : "",
-                event.getLocation() != null ? "*Место\\:* " + escapeMarkdownV2(event.getLocation().getTitle()) : ""
-        );
-    }
-
-    // Экранирование символов Markdown
-    private String escapeMarkdownV2(String text) {
-        if (text == null) return "";
-        return text.replaceAll("([_*\\[\\]()~`>#+=|{}\\.!\\-:])", "\\\\$1");
-    }
-
     private void handleIncomingMessage(Update update) {
         String messageText = update.getMessage().getText();
         long chatId = update.getMessage().getChatId();
 
+        String helpText = """
+                Я маленький и такой команды пока что незнаю
+               
+                ⏰ Вот мои доступные команды:
+                /check Проверить общие события на сегодня
+                """;
+
         switch (messageText) {
             case "/start":
-                sendResponse(chatId, "Привет! Я буду напоминать о событиях из календаря.");
+                sendResponse(chatId, "Привет! Я напоминаю о событиях календаря команде");
                 break;
             case "/check":
                 sendResponse(chatId, "Проверяю календарь...");
+
                 break;
             default:
-                sendResponse(chatId, "Неизвестная команда");
+                sendResponse(chatId, helpText);
         }
     }
 

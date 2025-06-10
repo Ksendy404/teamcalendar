@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  bot:
+    image: ghcr.io/yourname/teamhelper-bot:latest
+    volumes:
+      - /secure/teamhelper/config:/app/config:ro
+      - /secure/teamhelper/logs:/app/logs
+    environment:
+      - SPRING_CONFIG_ADDITIONAL_LOCATION=/app/config/
+    restart: unless-stopped

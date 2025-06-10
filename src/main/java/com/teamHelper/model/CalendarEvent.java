@@ -1,4 +1,4 @@
-package com.teamHelper.pojo;
+package com.teamHelper.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 

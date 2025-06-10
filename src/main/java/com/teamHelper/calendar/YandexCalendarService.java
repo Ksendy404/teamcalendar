@@ -1,7 +1,7 @@
 package com.teamHelper.calendar;
 
 import com.teamHelper.bot.BotComponent;
-import com.teamHelper.pojo.CalendarEvent;
+import com.teamHelper.model.CalendarEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,10 +10,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static com.teamHelper.calendar.CalendarConstants.CHECK_INTERVAL_MINUTES;
+import static com.teamHelper.calendar.CalendarConstants.NOTIFY_BEFORE_MINUTES;
 
 @Slf4j
 @Service
@@ -23,11 +25,6 @@ public class YandexCalendarService {
     private final YandexCalDavService calDavService;
     private final BotComponent bot;
     private final Set<String> notifiedEvents = new HashSet<>();
-
-
-    // Настройки уведомлений
-    private static final int CHECK_INTERVAL_MINUTES = 1;  // Интервал проверки (в минутах)
-    private static final int NOTIFY_BEFORE_MINUTES = 5;   // Уведомлять за N минут до события
 
     @Scheduled(fixedRate = CHECK_INTERVAL_MINUTES * 60 * 1000)
     public void checkUpcomingEvents() {
@@ -56,7 +53,6 @@ public class YandexCalendarService {
         log.info("Starting calendar service with settings:");
         log.info("Check interval: {} minutes", CHECK_INTERVAL_MINUTES);
         log.info("Notify before: {} minutes", NOTIFY_BEFORE_MINUTES);
-
         try {
             calDavService.testCalDavConnection();
             log.info("CalDAV connection test successful");
@@ -64,7 +60,6 @@ public class YandexCalendarService {
             log.error("CalDAV connection test failed", e);
             bot.sendErrorMessage("Ошибка подключения к CalDAV: " + e.getMessage());
         }
-
         checkMissedEvents();
     }
 
@@ -115,5 +110,4 @@ public class YandexCalendarService {
         notifiedEvents.clear();
         log.info("Cleared notified events cache");
     }
-
 }
