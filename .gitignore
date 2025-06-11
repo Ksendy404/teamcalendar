@@ -3,6 +3,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 /config/secret.properties
+.env
+secret.properties
 
 //idea
 .idea/

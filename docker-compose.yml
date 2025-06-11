@@ -1,10 +1,25 @@
 version: '3.8'
+
 services:
-  bot:
-    image: ghcr.io/yourname/teamhelper-bot:latest
-    volumes:
-      - /secure/teamhelper/config:/app/config:ro
-      - /secure/teamhelper/logs:/app/logs
-    environment:
-      - SPRING_CONFIG_ADDITIONAL_LOCATION=/app/config/
+  telegram-bot:
+    build: .
+    container_name: telegram-calendar-bot
     restart: unless-stopped
+    volumes:
+      # Монтируем secret.properties с хоста в контейнер
+      - ./secret.properties:/app/config/secret.properties:ro
+      # Опционально: для логов
+      - ./logs:/app/logs
+    environment:
+      # Альтернативный способ передачи переменных (если нужно)
+      - SPRING_PROFILES_ACTIVE=production
+      # - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    # Если нужен веб-интерфейс
+    # ports:
+    #   - "8080:8080"
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge

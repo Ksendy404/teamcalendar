@@ -1,9 +1,17 @@
-FROM eclipse-temurin:17-jdk-jammy as builder
-WORKDIR /app
-COPY . .
-RUN ./mvnw clean package
+# Используем официальный OpenJDK образ
+FROM openjdk:17-jdk-slim
 
-FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
-COPY --from=builder /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+COPY target/*.jar app.jar
+
+RUN mkdir -p /app/config
+
+RUN addgroup --system spring && adduser --system spring --ingroup spring
+RUN chown -R spring:spring /app
+USER spring
+
+EXPOSE 8080
+
+# Запускаем приложение
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
