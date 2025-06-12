@@ -85,11 +85,10 @@ public class YandexCalendarService {
             log.debug("Checking for missed events");
             List<CalendarEvent> events = calDavService.getUpcomingEvents();
 
-            LocalDateTime now = LocalDateTime.now();
             long missedCount = events.stream()
                     .peek(e -> log.trace("Checking missed event: {} at {}", e.getTitle(), e.getStart()))
-                    .filter(e -> e.getStart().isAfter(now.minusMinutes(5)))
-                    .filter(e -> e.getStart().isBefore(now.plusMinutes(NOTIFY_BEFORE_MINUTES)))
+                    .filter(e -> e.getStart().isAfter(LocalDateTime.now().minusMinutes(5)))
+                    .filter(e -> e.getStart().isBefore(LocalDateTime.now().plusMinutes(NOTIFY_BEFORE_MINUTES)))
                     .peek(e -> {
                         log.info("Found missed event: {} at {}", e.getTitle(), e.getStart());
                         processEvent(e);

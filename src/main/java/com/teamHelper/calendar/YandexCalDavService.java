@@ -117,6 +117,7 @@ public class YandexCalDavService {
     }
 
     private List<CalendarEvent> parseEvents(InputStream icalStream) throws Exception {
+        // 1. Читаем ответ как строку
         String xmlResponse = IOUtils.toString(icalStream, StandardCharsets.UTF_8);
         log.debug("Parsing XML response ({} bytes)", xmlResponse.length());
 
@@ -124,12 +125,15 @@ public class YandexCalDavService {
             log.trace("Raw XML response:\n{}", xmlResponse);
         }
 
+        // 2. Создаем XML парсер с поддержкой namespace
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
 
+        // 3. Парсим XML с обработкой ошибок
         Document doc;
         try {
+            // Удаляем BOM если есть и другие невидимые символы
             String cleanXml = xmlResponse.replace("\uFEFF", "").trim();
             doc = builder.parse(new InputSource(new StringReader(cleanXml)));
         } catch (Exception e) {
@@ -138,14 +142,17 @@ public class YandexCalDavService {
             throw new RuntimeException("Failed to parse XML: " + e.getMessage(), e);
         }
 
+        // 4. Проверяем результат парсинга
         if (doc == null || doc.getDocumentElement() == null) {
             throw new RuntimeException("Invalid XML document structure");
         }
 
+        // 5. Ищем все ответы (response)
         NodeList responseNodes = doc.getElementsByTagNameNS("DAV:", "response");
         List<CalendarEvent> events = new ArrayList<>();
         CalendarBuilder calendarBuilder = new CalendarBuilder();
 
+        // 6. Обрабатываем каждый response
         log.debug("Processing {} XML response nodes", responseNodes.getLength());
 
         for (int i = 0; i < responseNodes.getLength(); i++) {
@@ -155,6 +162,7 @@ public class YandexCalDavService {
 
             for (int j = 0; j < calendarDataNodes.getLength(); j++) {
                 String icalContent = calendarDataNodes.item(j).getTextContent();
+                // Чистим и нормализуем iCalendar данные
                 try {
                     icalContent = icalContent.trim()
                             .replaceAll("\r", "")
@@ -166,7 +174,7 @@ public class YandexCalDavService {
                     if (log.isTraceEnabled()) {
                         log.trace("iCalendar content:\n{}", icalContent);
                     }
-
+                    // Парсим iCalendar
                     Calendar calendar = calendarBuilder.build(new StringReader(icalContent));
                     List<CalendarEvent> blockEvents = calendar.getComponents(Component.VEVENT).stream()
                             .map(c -> (VEvent) c)
@@ -192,24 +200,26 @@ public class YandexCalDavService {
     private CalendarEvent convertEvent(VEvent vEvent) {
         String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Untitled";
 
-        log.debug("Converting event: {}", title);
         if (log.isTraceEnabled()) {
             log.trace("Event details - Start: {}, End: {}",
                     vEvent.getStartDate() != null ? vEvent.getStartDate().getDate() : "null",
                     vEvent.getEndDate() != null ? vEvent.getEndDate().getDate() : "null");
         }
 
+        // 1. Основные обязательные поля
         CalendarEvent event = new CalendarEvent();
 
         event.setId(vEvent.getUid().getValue());
         event.setTitle(title);
 
+        // 2. Преобразование дат (с обработкой временных зон)
         if (vEvent.getStartDate() != null && vEvent.getStartDate().getDate() != null) {
             event.setStart(vEvent.getStartDate().getDate().toInstant()
                     .atZone(ZoneId.systemDefault())
                     .toLocalDateTime());
         }
 
+        // 3. Опциональные поля (с проверкой на null)
         if (vEvent.getEndDate() != null && vEvent.getEndDate().getDate() != null) {
             event.setEnd(vEvent.getEndDate().getDate().toInstant()
                     .atZone(ZoneId.systemDefault())
@@ -224,6 +234,7 @@ public class YandexCalDavService {
             event.setUrl(vEvent.getUrl().getValue());
         }
 
+        // 4. Локация (если есть)
         if (vEvent.getLocation() != null) {
             CalendarEvent.Location location = new CalendarEvent.Location();
             location.setTitle(vEvent.getLocation().getValue());
