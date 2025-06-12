@@ -78,18 +78,12 @@ public class BotComponent extends TelegramLongPollingBot {
 
         String helpText = """
                 Я маленький и такой команды пока что незнаю
-                               
-                ⏰ Вот мои доступные команды:
-                /check Проверить общие события на сегодня
+                              
                 """;
 
         switch (messageText) {
             case "/start":
                 sendResponse(chatId, "Привет! Я напоминаю о событиях календаря команде");
-                break;
-            case "/check":
-                sendResponse(chatId, "Проверяю календарь...");
-
                 break;
             default:
                 sendResponse(chatId, helpText);

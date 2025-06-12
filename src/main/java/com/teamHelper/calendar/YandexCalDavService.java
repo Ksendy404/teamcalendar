@@ -198,6 +198,8 @@ public class YandexCalDavService {
     }
 
     private CalendarEvent convertEvent(VEvent vEvent) {
+        ZoneId serverZone = ZoneId.of("Europe/Moscow"); // Указываем явно московское время
+
         String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Untitled";
 
         if (log.isTraceEnabled()) {
@@ -210,19 +212,20 @@ public class YandexCalDavService {
         CalendarEvent event = new CalendarEvent();
 
         event.setId(vEvent.getUid().getValue());
+
         event.setTitle(title);
 
         // 2. Преобразование дат (с обработкой временных зон)
         if (vEvent.getStartDate() != null && vEvent.getStartDate().getDate() != null) {
             event.setStart(vEvent.getStartDate().getDate().toInstant()
-                    .atZone(ZoneId.systemDefault())
+                    .atZone(serverZone)
                     .toLocalDateTime());
         }
 
         // 3. Опциональные поля (с проверкой на null)
         if (vEvent.getEndDate() != null && vEvent.getEndDate().getDate() != null) {
             event.setEnd(vEvent.getEndDate().getDate().toInstant()
-                    .atZone(ZoneId.systemDefault())
+                    .atZone(serverZone)
                     .toLocalDateTime());
         }
 
