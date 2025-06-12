@@ -11,7 +11,7 @@ services:
       # Оставляем только логи если нужно
       - ./logs:/app/logs
     environment:
-      - SPRING_PROFILES_ACTIVE=production
+      - SPRING_PROFILES_ACTIVE=prod
     # Если нужен веб-интерфейс
     # ports:
     #   - "8080:8080"

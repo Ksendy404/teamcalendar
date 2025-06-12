@@ -45,3 +45,25 @@ docker-compose logs -f telegram-bot
 # Проверьте статус
 docker-compose ps
 ```
+
+
+
+1. Проверьте статус контейнера:
+   bashdocker compose ps
+2. Посмотрите логи бота:
+   bashdocker compose logs telegram-bot
+3. Для мониторинга логов в реальном времени:
+   bashdocker compose logs -f telegram-bot
+4. Проверьте, что бот отвечает в Telegram
+   Полезные команды для управления:
+   bash# Остановить
+   docker compose down
+
+# Перезапустить
+docker compose restart telegram-bot
+
+# Посмотреть использование ресурсов
+docker stats
+
+# Обновить проект из Git
+git pull && docker compose up -d --build

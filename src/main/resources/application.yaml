@@ -1,6 +1,49 @@
-yandex:
-  caldav:
-    url: https://caldav.yandex.ru/
-    username: callcalendar
-    password: qjwmrfffpsxlskou
-    calendar: personal # или другой календарь
+# Основные настройки логирования
+logging:
+  level:
+    root: INFO
+    com.teamHelper.calendar: INFO
+    org.springframework: WARN
+    org.apache.http: WARN
+    net.fortuna.ical4j: WARN
+
+  # Группировка логгеров для удобства управления
+  group:
+    calendar: com.teamHelper.calendar
+    http: org.apache.http, org.springframework.web.client
+
+  # Паттерны для разных профилей
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+---
+# Профиль для разработки
+spring:
+  profiles: dev
+
+logging:
+  level:
+    com.teamHelper.calendar: DEBUG
+
+---
+# Профиль для дебага (максимальная детализация)
+spring:
+  profiles: debug
+
+logging:
+  level:
+    root: DEBUG
+    com.teamHelper.calendar: TRACE
+    org.apache.http.wire: DEBUG
+    net.fortuna.ical4j: DEBUG
+
+---
+# Продакшн профиль (минимум логов)
+spring:
+  profiles: prod
+
+logging:
+  level:
+    root: WARN
+    com.teamHelper.calendar: WARN

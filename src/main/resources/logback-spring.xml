@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProfile name="!prod">
+        <property name="LOG_LEVEL_ROOT" value="INFO"/>
+        <property name="LOG_LEVEL_CALENDAR" value="INFO"/>
+        <property name="LOG_LEVEL_SPRING" value="WARN"/>
+        <property name="LOG_LEVEL_HTTP" value="WARN"/>
+        <property name="LOG_LEVEL_ICAL4J" value="WARN"/>
+        <property name="LOG_FILE_NAME" value="teamhelper"/>
+    </springProfile>
+
+    <springProfile name="prod">
+        <property name="LOG_LEVEL_ROOT" value="WARN"/>
+        <property name="LOG_LEVEL_CALENDAR" value="WARN"/>
+        <property name="LOG_LEVEL_SPRING" value="WARN"/>
+        <property name="LOG_LEVEL_HTTP" value="WARN"/>
+        <property name="LOG_LEVEL_ICAL4J" value="WARN"/>
+        <property name="LOG_FILE_NAME" value="teamhelper"/>
+    </springProfile>
+
+    <springProfile name="debug">
+        <property name="LOG_LEVEL_ROOT" value="DEBUG"/>
+        <property name="LOG_LEVEL_CALENDAR" value="TRACE"/>
+        <property name="LOG_LEVEL_SPRING" value="DEBUG"/>
+        <property name="LOG_LEVEL_HTTP" value="DEBUG"/>
+        <property name="LOG_LEVEL_ICAL4J" value="DEBUG"/>
+    </springProfile>
+
+    <!-- Консольный аппендер -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Файловый аппендер -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/${LOG_FILE_NAME}.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/${LOG_FILE_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Отдельный аппендер для календарных событий -->
+    <appender name="CALENDAR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/calendar.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/calendar.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Логгеры для календарных сервисов -->
+    <logger name="com.teamHelper.calendar" level="${LOG_LEVEL_CALENDAR}" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="CALENDAR_FILE"/>
+    </logger>
+
+    <logger name="org.springframework" level="${LOG_LEVEL_SPRING}"/>
+    <logger name="org.apache.http" level="${LOG_LEVEL_HTTP}"/>
+    <logger name="net.fortuna.ical4j" level="${LOG_LEVEL_ICAL4J}"/>
+
+    <!-- Снижаем уровень для Spring и HTTP клиентов -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.apache.http" level="WARN"/>
+    <logger name="net.fortuna.ical4j" level="WARN"/>
+
+    <!-- Для дебага можно временно включить -->
+    <springProfile name="debug">
+        <logger name="com.teamHelper.calendar" level="DEBUG"/>
+        <logger name="org.apache.http.wire" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Корневой логгер -->
+    <root level="${LOG_LEVEL_ROOT}">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>

@@ -29,85 +29,118 @@ public class YandexCalendarService {
     @Scheduled(fixedRate = CHECK_INTERVAL_MINUTES * 60 * 1000)
     public void checkUpcomingEvents() {
         try {
-            log.info("Checking events for next {} minutes", CHECK_INTERVAL_MINUTES);
+            log.debug("Checking events for next {} minutes", CHECK_INTERVAL_MINUTES);
             List<CalendarEvent> events = calDavService.getUpcomingEvents();
-            log.info("Found {} events", events.size());
-            events.forEach(event -> {
-                log.debug("Processing event: {}", event.getTitle());
-                processEvent(event);
-            });
+
+            if (events.isEmpty()) {
+                log.debug("No events found");
+                return;
+            }
+
+            log.debug("Processing {} events", events.size());
+            long notifiedCount = events.stream()
+                    .peek(event -> log.trace("Processing event: {}", event.getTitle()))
+                    .mapToLong(event -> processEvent(event) ? 1 : 0)
+                    .sum();
+
+            if (notifiedCount > 0) {
+                log.info("Sent {} event notifications", notifiedCount);
+            }
+
         } catch (Exception e) {
-            log.error("Event check failed", e);
+            log.error("Event check failed: {}", e.getMessage());
+            log.debug("Event check error details", e);
             bot.sendErrorMessage("Ошибка получения событий: " + e.getMessage());
         }
     }
 
-    private void processEvent(CalendarEvent event) {
+    private boolean processEvent(CalendarEvent event) {
         if (shouldNotify(event)) {
+            log.info("Sending notification for event: {}", event.getTitle());
             bot.sendCalendarNotification(event);
+            return true;
         }
+        return false;
     }
 
     @PostConstruct
     public void init() {
-        log.info("Starting calendar service with settings:");
-        log.info("Check interval: {} minutes", CHECK_INTERVAL_MINUTES);
-        log.info("Notify before: {} minutes", NOTIFY_BEFORE_MINUTES);
+        log.info("Starting calendar service (check: {}min, notify: {}min before)",
+                CHECK_INTERVAL_MINUTES, NOTIFY_BEFORE_MINUTES);
+
         try {
             calDavService.testCalDavConnection();
-            log.info("CalDAV connection test successful");
+            log.info("CalDAV connection successful");
         } catch (Exception e) {
-            log.error("CalDAV connection test failed", e);
+            log.error("CalDAV connection failed: {}", e.getMessage());
+            log.debug("CalDAV connection error details", e);
             bot.sendErrorMessage("Ошибка подключения к CalDAV: " + e.getMessage());
         }
+
         checkMissedEvents();
     }
 
     private void checkMissedEvents() {
         try {
-            log.info("Checking for missed events");
+            log.debug("Checking for missed events");
             List<CalendarEvent> events = calDavService.getUpcomingEvents();
 
-            long found = events.stream()
-                    .peek(e -> log.debug("Candidate event: {} at {}", e.getTitle(), e.getStart()))
-                    .filter(e -> e.getStart().isAfter(LocalDateTime.now().minusMinutes(5)))
-                    .filter(e -> e.getStart().isBefore(LocalDateTime.now().plusMinutes(NOTIFY_BEFORE_MINUTES)))
-                    .peek(e -> log.info("Found missed event: {}", e.getTitle()))
+            LocalDateTime now = LocalDateTime.now();
+            long missedCount = events.stream()
+                    .peek(e -> log.trace("Checking missed event: {} at {}", e.getTitle(), e.getStart()))
+                    .filter(e -> e.getStart().isAfter(now.minusMinutes(5)))
+                    .filter(e -> e.getStart().isBefore(now.plusMinutes(NOTIFY_BEFORE_MINUTES)))
+                    .peek(e -> {
+                        log.info("Found missed event: {} at {}", e.getTitle(), e.getStart());
+                        processEvent(e);
+                    })
                     .count();
 
-            log.info("Missed events check completed. Found: {}", found);
+            if (missedCount > 0) {
+                log.info("Processed {} missed events", missedCount);
+            } else {
+                log.debug("No missed events found");
+            }
+
         } catch (Exception e) {
-            log.error("Missed events check failed", e);
+            log.error("Missed events check failed: {}", e.getMessage());
+            log.debug("Missed events check error details", e);
             bot.sendErrorMessage("Ошибка проверки пропущенных событий: " + e.getMessage());
         }
     }
+
     private boolean shouldNotify(CalendarEvent event) {
         if (event.getStart() == null || notifiedEvents.contains(event.getId())) {
+            log.trace("Skipping event '{}': {} (start null: {}, already notified: {})",
+                    event.getTitle(), event.getId(),
+                    event.getStart() == null,
+                    notifiedEvents.contains(event.getId()));
             return false;
         }
 
-        Duration timeUntilEvent = Duration.between(LocalDateTime.now(), event.getStart());
+        LocalDateTime now = LocalDateTime.now();
+        Duration timeUntilEvent = Duration.between(now, event.getStart());
         long minutes = timeUntilEvent.toMinutes();
 
         boolean shouldNotify = !timeUntilEvent.isNegative()
-                && timeUntilEvent.toMinutes() <= NOTIFY_BEFORE_MINUTES;
+                && minutes <= NOTIFY_BEFORE_MINUTES;
+
+        log.trace("Event '{}': {} minutes until start (should notify: {})",
+                event.getTitle(), minutes, shouldNotify);
 
         if (shouldNotify) {
             notifiedEvents.add(event.getId());
+            log.debug("Event '{}' scheduled for notification ({} minutes until start)",
+                    event.getTitle(), minutes);
         }
-
-        log.debug("Checking event '{}': {} minutes left (now: {}, event: {})",
-                event.getTitle(),
-                minutes,
-                LocalDateTime.now(),
-                event.getStart());
 
         return shouldNotify;
     }
 
-    @Scheduled(cron = "0 0 0 * * ?") // Каждый день в полночь
+    @Scheduled(cron = "0 0 0 * * ?") // Каждый день в полночь очистка кеша
     public void clearNotifiedEventsCache() {
+        int clearedCount = notifiedEvents.size();
         notifiedEvents.clear();
-        log.info("Cleared notified events cache");
+        log.info("Cleared {} notified events from cache", clearedCount);
     }
 }

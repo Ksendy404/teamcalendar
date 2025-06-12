@@ -39,8 +39,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -77,76 +75,79 @@ public class YandexCalDavService {
     public List<CalendarEvent> getUpcomingEvents() throws Exception {
         try {
             LocalDateTime start = LocalDate.now().atTime(9, 0);
-            LocalDateTime end = LocalDate.now().atTime(22, 0);   //TODO для отладки
+            LocalDateTime end = LocalDate.now().atTime(18, 0);
 
             String calendarUrl = caldavUrl.endsWith("/") ? caldavUrl : caldavUrl + "/";
 
-            // 2. Создаем REPORT запрос
             HttpReport request = new HttpReport(URI.create(calendarUrl));
-
             request.setHeader("Depth", "1");
             request.setHeader("Content-Type", "text/xml; charset=utf-8");
             request.setHeader("Prefer", "return-minimal");
 
             String xmlBody = calendarQueryBuilder.buildCalendarQuery(start, end);
-
             request.setEntity(new StringEntity(xmlBody, StandardCharsets.UTF_8));
 
-            log.debug("Sending CalDAV REPORT request:\n{}", xmlBody);
+            log.debug("Sending CalDAV REPORT request to: {}", calendarUrl);
+            if (log.isTraceEnabled()) {
+                log.trace("Request body:\n{}", xmlBody);
+            }
 
-            // 3. Выполняем запрос
             try (CloseableHttpResponse response = client.execute(request)) {
                 String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                int statusCode = response.getStatusLine().getStatusCode();
 
-                if (response.getStatusLine().getStatusCode() != 207) {
-                    throw new RuntimeException(String.format(
-                            "CalDAV error %d\nRequest:\n%s\nResponse:\n%s",
-                            response.getStatusLine().getStatusCode(),
-                            xmlBody,
-                            responseBody
-                    ));
+                if (statusCode != 207) {
+                    log.error("CalDAV error: HTTP {}", statusCode);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Request:\n{}\nResponse:\n{}", xmlBody, responseBody);
+                    }
+                    throw new RuntimeException(String.format("CalDAV error %d", statusCode));
                 }
-                return parseEvents(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
+
+                List<CalendarEvent> events = parseEvents(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
+                log.info("Retrieved {} calendar events", events.size());
+                return events;
             }
 
         } catch (Exception e) {
-            log.error("Failed to get upcoming events", e);
+            log.error("Failed to get upcoming events: {}", e.getMessage());
+            log.debug("Full error details", e);
             throw new RuntimeException("Failed to fetch calendar events", e);
         }
     }
 
     private List<CalendarEvent> parseEvents(InputStream icalStream) throws Exception {
-        // 1. Читаем ответ как строку
         String xmlResponse = IOUtils.toString(icalStream, StandardCharsets.UTF_8);
-        log.debug("Raw XML response:\n{}", xmlResponse);
+        log.debug("Parsing XML response ({} bytes)", xmlResponse.length());
 
-        // 2. Создаем XML парсер с поддержкой namespace
+        if (log.isTraceEnabled()) {
+            log.trace("Raw XML response:\n{}", xmlResponse);
+        }
+
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
 
-        // 3. Парсим XML с обработкой ошибок
         Document doc;
         try {
-            // Удаляем BOM если есть и другие невидимые символы
             String cleanXml = xmlResponse.replace("\uFEFF", "").trim();
             doc = builder.parse(new InputSource(new StringReader(cleanXml)));
         } catch (Exception e) {
+            log.error("Failed to parse XML: {}", e.getMessage());
+            log.debug("Problematic XML content", e);
             throw new RuntimeException("Failed to parse XML: " + e.getMessage(), e);
         }
 
-        // 4. Проверяем результат парсинга
         if (doc == null || doc.getDocumentElement() == null) {
             throw new RuntimeException("Invalid XML document structure");
         }
-        log.debug("XML document parsed successfully");
 
-        // 5. Ищем все ответы (response)
         NodeList responseNodes = doc.getElementsByTagNameNS("DAV:", "response");
         List<CalendarEvent> events = new ArrayList<>();
         CalendarBuilder calendarBuilder = new CalendarBuilder();
 
-        // 6. Обрабатываем каждый response
+        log.debug("Processing {} XML response nodes", responseNodes.getLength());
+
         for (int i = 0; i < responseNodes.getLength(); i++) {
             Node responseNode = responseNodes.item(i);
             NodeList calendarDataNodes = ((Element) responseNode)
@@ -155,45 +156,54 @@ public class YandexCalDavService {
             for (int j = 0; j < calendarDataNodes.getLength(); j++) {
                 String icalContent = calendarDataNodes.item(j).getTextContent();
                 try {
-                    // Чистим и нормализуем iCalendar данные
                     icalContent = icalContent.trim()
                             .replaceAll("\r", "")
                             .replaceAll("\n ", "\n");
 
                     if (icalContent.isEmpty()) continue;
 
-                    log.debug("Processing iCalendar block #{}-{}:\n{}", i + 1, j + 1, icalContent);
+                    log.trace("Processing iCalendar block #{}-{}", i + 1, j + 1);
+                    if (log.isTraceEnabled()) {
+                        log.trace("iCalendar content:\n{}", icalContent);
+                    }
 
-                    // Парсим iCalendar
                     Calendar calendar = calendarBuilder.build(new StringReader(icalContent));
-                    events.addAll(calendar.getComponents(Component.VEVENT).stream()
+                    List<CalendarEvent> blockEvents = calendar.getComponents(Component.VEVENT).stream()
                             .map(c -> (VEvent) c)
                             .map(this::convertEvent)
-                            .collect(Collectors.toList()));
+                            .collect(Collectors.toList());
+
+                    events.addAll(blockEvents);
+                    log.debug("Parsed {} events from block #{}-{}", blockEvents.size(), i + 1, j + 1);
+
                 } catch (Exception e) {
-                    log.error("Failed to parse iCalendar block #{}-{}: {}", i + 1, j + 1, e.getMessage());
-                    log.debug("Problematic content:\n{}", icalContent);
+                    log.warn("Failed to parse iCalendar block #{}-{}: {}", i + 1, j + 1, e.getMessage());
+                    if (log.isDebugEnabled()) {
+                        log.debug("Problematic iCalendar content:\n{}", icalContent, e);
+                    }
                 }
             }
         }
 
-        log.info("Successfully parsed {} events", events.size());
+        log.info("Successfully parsed {} total events", events.size());
         return events;
     }
 
     private CalendarEvent convertEvent(VEvent vEvent) {
-        log.info("Converting event: {} (Start: {}, End: {})",
-                vEvent.getSummary().getValue(),
-                vEvent.getStartDate().getDate(),
-                vEvent.getEndDate().getDate());
+        String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Untitled";
+
+        log.debug("Converting event: {}", title);
+        if (log.isTraceEnabled()) {
+            log.trace("Event details - Start: {}, End: {}",
+                    vEvent.getStartDate() != null ? vEvent.getStartDate().getDate() : "null",
+                    vEvent.getEndDate() != null ? vEvent.getEndDate().getDate() : "null");
+        }
 
         CalendarEvent event = new CalendarEvent();
 
-        // 1. Основные обязательные поля
         event.setId(vEvent.getUid().getValue());
-        event.setTitle(vEvent.getSummary().getValue());
+        event.setTitle(title);
 
-        // 2. Преобразование дат (с обработкой временных зон)
         if (vEvent.getStartDate() != null && vEvent.getStartDate().getDate() != null) {
             event.setStart(vEvent.getStartDate().getDate().toInstant()
                     .atZone(ZoneId.systemDefault())
@@ -206,7 +216,6 @@ public class YandexCalDavService {
                     .toLocalDateTime());
         }
 
-        // 3. Опциональные поля (с проверкой на null)
         if (vEvent.getDescription() != null) {
             event.setDescription(vEvent.getDescription().getValue());
         }
@@ -215,7 +224,6 @@ public class YandexCalDavService {
             event.setUrl(vEvent.getUrl().getValue());
         }
 
-        // 4. Локация (если есть)
         if (vEvent.getLocation() != null) {
             CalendarEvent.Location location = new CalendarEvent.Location();
             location.setTitle(vEvent.getLocation().getValue());
@@ -231,29 +239,30 @@ public class YandexCalDavService {
     }
 
     public void testCalDavConnection() throws Exception {
-        log.info("Testing CalDAV connection to {}", caldavUrl);
+        log.debug("Testing CalDAV connection to {}", caldavUrl);
 
-        // 1. Создаем простой PROPFIND запрос (стандартный для CalDAV)
         HttpPropfind request = new HttpPropfind(URI.create(caldavUrl));
-        request.setHeader("Depth", "0"); // Только для указанного URL
+        request.setHeader("Depth", "0");
 
-        // 2. Отправляем запрос
         try (CloseableHttpResponse response = client.execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
 
-            // 3. Проверяем код ответа
-            if (statusCode == 207) { // 207 Multi-Status - ожидаемый ответ для PROPFIND
+            if (statusCode == 207) {
                 log.debug("CalDAV connection test successful (HTTP 207)");
                 return;
             }
 
-            // 4. Обрабатываем ошибки
             String responseBody = EntityUtils.toString(response.getEntity());
+            log.error("CalDAV test failed. Status: {}", statusCode);
+            log.debug("Response body: {}", responseBody);
+
             throw new RuntimeException(
                     "CalDAV test failed. Status: " + statusCode +
                             ", Response: " + responseBody
             );
         } catch (IOException e) {
+            log.error("CalDAV connection error: {}", e.getMessage());
+            log.debug("Connection error details", e);
             throw new RuntimeException("CalDAV connection error: " + e.getMessage(), e);
         }
     }
