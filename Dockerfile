@@ -1,17 +1,13 @@
-# Используем официальный OpenJDK образ
-FROM openjdk:17-jdk-slim
-
+# Этап сборки
+FROM maven:3.8.4-openjdk-17 AS build
 WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
-COPY target/*.jar app.jar
-
-RUN mkdir -p /app/config
-
-RUN addgroup --system spring && adduser --system spring --ingroup spring
-RUN chown -R spring:spring /app
-USER spring
-
+# Этап запуска
+FROM openjdk:17-jre-slim
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-
-# Запускаем приложение
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
