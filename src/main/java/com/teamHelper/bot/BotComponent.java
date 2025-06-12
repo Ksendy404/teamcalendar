@@ -9,8 +9,6 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.time.format.DateTimeFormatter;
-
 @Component
 public class BotComponent extends TelegramLongPollingBot {
 
@@ -80,7 +78,7 @@ public class BotComponent extends TelegramLongPollingBot {
 
         String helpText = """
                 Я маленький и такой команды пока что незнаю
-               
+                               
                 ⏰ Вот мои доступные команды:
                 /check Проверить общие события на сегодня
                 """;

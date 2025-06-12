@@ -20,7 +20,9 @@ logging:
 ---
 # Профиль для разработки
 spring:
-  profiles: dev
+  config:
+    activate:
+      on-profile: dev
 
 logging:
   level:
@@ -29,7 +31,9 @@ logging:
 ---
 # Профиль для дебага (максимальная детализация)
 spring:
-  profiles: debug
+  config:
+    activate:
+      on-profile: debug
 
 logging:
   level:
@@ -41,7 +45,9 @@ logging:
 ---
 # Продакшн профиль (минимум логов)
 spring:
-  profiles: prod
+  config:
+    activate:
+      on-profile: prod
 
 logging:
   level:
