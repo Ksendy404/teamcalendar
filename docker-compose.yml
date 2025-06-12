@@ -5,15 +5,13 @@ services:
     build: .
     container_name: telegram-calendar-bot
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
-      # Монтируем secret.properties с хоста в контейнер
-      - ./secret.properties:/app/config/secret.properties:ro
-      # Опционально: для логов
+      # Оставляем только логи если нужно
       - ./logs:/app/logs
     environment:
-      # Альтернативный способ передачи переменных (если нужно)
       - SPRING_PROFILES_ACTIVE=production
-      # - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     # Если нужен веб-интерфейс
     # ports:
     #   - "8080:8080"
