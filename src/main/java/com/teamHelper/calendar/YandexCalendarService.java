@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,37 +27,43 @@ public class YandexCalendarService {
     private final BotComponent bot;
     private final Set<String> notifiedEvents = new HashSet<>();
 
+    // Рабочие часы
+    private static final LocalTime WORK_START = LocalTime.of(9, 0);
+    private static final LocalTime WORK_END = LocalTime.of(18, 0);
+
     @Scheduled(fixedRate = CHECK_INTERVAL_MINUTES * 60 * 1000)
     public void checkUpcomingEvents() {
+        // Проверяем, рабочее ли время
+        LocalTime now = LocalTime.now();
+        if (now.isBefore(WORK_START) || now.isAfter(WORK_END)) {
+            log.debug("Вне рабочих часов ({} - {}), проверка календаря пропущена", WORK_START, WORK_END);
+            return;
+        }
+
         try {
-            log.debug("Checking events for next {} minutes", CHECK_INTERVAL_MINUTES);
             List<CalendarEvent> events = calDavService.getUpcomingEvents();
 
             if (events.isEmpty()) {
-                log.debug("No events found");
                 return;
             }
 
-            log.debug("Processing {} events", events.size());
             long notifiedCount = events.stream()
-                    .peek(event -> log.trace("Processing event: {}", event.getTitle()))
                     .mapToLong(event -> processEvent(event) ? 1 : 0)
                     .sum();
 
             if (notifiedCount > 0) {
-                log.info("Sent {} event notifications", notifiedCount);
+                log.info("Отправлено {} уведомлений о событиях", notifiedCount);
             }
 
         } catch (Exception e) {
-            log.error("Event check failed: {}", e.getMessage());
-            log.debug("Event check error details", e);
+            log.error("Ошибка проверки событий: {}", e.getMessage());
             bot.sendErrorMessage("Ошибка получения событий: " + e.getMessage());
         }
     }
 
     private boolean processEvent(CalendarEvent event) {
         if (shouldNotify(event)) {
-            log.info("Sending notification for event: {}", event.getTitle());
+            log.info("Отправка уведомления о событии: {}", event.getTitle());
             bot.sendCalendarNotification(event);
             return true;
         }
@@ -65,55 +72,49 @@ public class YandexCalendarService {
 
     @PostConstruct
     public void init() {
-        log.info("Starting calendar service (check: {}min, notify: {}min before)",
-                CHECK_INTERVAL_MINUTES, NOTIFY_BEFORE_MINUTES);
+        log.info("Запуск календарного сервиса (проверка: {} мин, уведомление: {} мин до события, рабочие часы: {} - {})",
+                CHECK_INTERVAL_MINUTES, NOTIFY_BEFORE_MINUTES, WORK_START, WORK_END);
 
         try {
             calDavService.testCalDavConnection();
-            log.info("CalDAV connection successful");
+            log.info("CalDAV подключение успешно");
         } catch (Exception e) {
-            log.error("CalDAV connection failed: {}", e.getMessage());
-            log.debug("CalDAV connection error details", e);
+            log.error("Ошибка подключения CalDAV: {}", e.getMessage());
             bot.sendErrorMessage("Ошибка подключения к CalDAV: " + e.getMessage());
         }
 
-        checkMissedEvents();
+        // Проверяем пропущенные события только в рабочее время
+        LocalTime now = LocalTime.now();
+        if (!now.isBefore(WORK_START) && !now.isAfter(WORK_END)) {
+            checkMissedEvents();
+        }
     }
 
     private void checkMissedEvents() {
         try {
-            log.debug("Checking for missed events");
             List<CalendarEvent> events = calDavService.getUpcomingEvents();
 
             long missedCount = events.stream()
-                    .peek(e -> log.trace("Checking missed event: {} at {}", e.getTitle(), e.getStart()))
                     .filter(e -> e.getStart().isAfter(LocalDateTime.now().minusMinutes(5)))
                     .filter(e -> e.getStart().isBefore(LocalDateTime.now().plusMinutes(NOTIFY_BEFORE_MINUTES)))
                     .peek(e -> {
-                        log.info("Found missed event: {} at {}", e.getTitle(), e.getStart());
+                        log.info("Найдено пропущенное событие: {} в {}", e.getTitle(), e.getStart());
                         processEvent(e);
                     })
                     .count();
 
             if (missedCount > 0) {
-                log.info("Processed {} missed events", missedCount);
-            } else {
-                log.debug("No missed events found");
+                log.info("Обработано {} пропущенных событий", missedCount);
             }
 
         } catch (Exception e) {
-            log.error("Missed events check failed: {}", e.getMessage());
-            log.debug("Missed events check error details", e);
+            log.error("Ошибка проверки пропущенных событий: {}", e.getMessage());
             bot.sendErrorMessage("Ошибка проверки пропущенных событий: " + e.getMessage());
         }
     }
 
     private boolean shouldNotify(CalendarEvent event) {
         if (event.getStart() == null || notifiedEvents.contains(event.getId())) {
-            log.trace("Skipping event '{}': {} (start null: {}, already notified: {})",
-                    event.getTitle(), event.getId(),
-                    event.getStart() == null,
-                    notifiedEvents.contains(event.getId()));
             return false;
         }
 
@@ -124,13 +125,8 @@ public class YandexCalendarService {
         boolean shouldNotify = !timeUntilEvent.isNegative()
                 && minutes <= NOTIFY_BEFORE_MINUTES;
 
-        log.trace("Event '{}': {} minutes until start (should notify: {})",
-                event.getTitle(), minutes, shouldNotify);
-
         if (shouldNotify) {
             notifiedEvents.add(event.getId());
-            log.debug("Event '{}' scheduled for notification ({} minutes until start)",
-                    event.getTitle(), minutes);
         }
 
         return shouldNotify;
@@ -140,6 +136,8 @@ public class YandexCalendarService {
     public void clearNotifiedEventsCache() {
         int clearedCount = notifiedEvents.size();
         notifiedEvents.clear();
-        log.info("Cleared {} notified events from cache", clearedCount);
+        if (clearedCount > 0) {
+            log.info("Очищен кеш уведомленных событий: {} записей", clearedCount);
+        }
     }
 }

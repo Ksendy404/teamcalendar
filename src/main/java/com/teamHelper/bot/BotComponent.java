@@ -8,9 +8,13 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 public class BotComponent extends TelegramLongPollingBot {
+
+    private static final Logger log = LoggerFactory.getLogger(BotComponent.class);
 
     @Autowired
     private MessageBuilder messageBuilder;
@@ -32,7 +36,7 @@ public class BotComponent extends TelegramLongPollingBot {
 
     public BotComponent(@Value("${telegram.bot.token}") String botToken) {
         super(botToken);
-        System.out.println("🟢 Бот инициализирован. Токен: " + botToken.substring(0, 6) + "...");
+        log.info("Бот инициализирован");
     }
 
     @Override
@@ -54,21 +58,23 @@ public class BotComponent extends TelegramLongPollingBot {
         message.setText("❌ Ошибка: " + errorText);
         try {
             execute(message);
+            log.info("Отправлено сообщение об ошибке администратору");
         } catch (TelegramApiException e) {
-            System.err.println("Ошибка отправки: " + e.getMessage());
+            log.error("Ошибка отправки сообщения об ошибке: {}", e.getMessage());
         }
     }
 
     // Отправка уведомления о событии
     public void sendCalendarNotification(CalendarEvent event) {
         SendMessage message = new SendMessage();
-        message.setChatId(notificationChatId); // Отправляем в указанный чат
+        message.setChatId(notificationChatId);
         message.setText(messageBuilder.buildEventMessage(event));
         message.setParseMode("MarkdownV2");
         try {
             execute(message);
+            log.info("Отправлено уведомление о событии: {}", event.getTitle());
         } catch (TelegramApiException e) {
-            System.err.println("Ошибка отправки: " + e.getMessage());
+            log.error("Ошибка отправки уведомления о событии '{}': {}", event.getTitle(), e.getMessage());
         }
     }
 
@@ -77,7 +83,7 @@ public class BotComponent extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
 
         String helpText = """
-                Я маленький и такой команды пока что незнаю
+                Я маленький и такой команды пока что не знаю
                               
                 """;
 
@@ -98,7 +104,7 @@ public class BotComponent extends TelegramLongPollingBot {
         try {
             execute(message);
         } catch (TelegramApiException e) {
-            System.err.println("Ошибка отправки: " + e.getMessage());
+            log.error("Ошибка отправки ответа: {}", e.getMessage());
         }
     }
 }

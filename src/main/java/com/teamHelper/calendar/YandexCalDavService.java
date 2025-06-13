@@ -87,73 +87,54 @@ public class YandexCalDavService {
             String xmlBody = calendarQueryBuilder.buildCalendarQuery(start, end);
             request.setEntity(new StringEntity(xmlBody, StandardCharsets.UTF_8));
 
-            log.debug("Sending CalDAV REPORT request to: {}", calendarUrl);
-            if (log.isTraceEnabled()) {
-                log.trace("Request body:\n{}", xmlBody);
-            }
+            log.debug("Отправка CalDAV REPORT запроса к: {}", calendarUrl);
 
             try (CloseableHttpResponse response = client.execute(request)) {
                 String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
                 int statusCode = response.getStatusLine().getStatusCode();
 
                 if (statusCode != 207) {
-                    log.error("CalDAV error: HTTP {}", statusCode);
-                    if (log.isDebugEnabled()) {
-                        log.debug("Request:\n{}\nResponse:\n{}", xmlBody, responseBody);
-                    }
-                    throw new RuntimeException(String.format("CalDAV error %d", statusCode));
+                    log.error("Ошибка CalDAV: HTTP {}", statusCode);
+                    throw new RuntimeException(String.format("Ошибка CalDAV %d", statusCode));
                 }
 
                 List<CalendarEvent> events = parseEvents(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
-                log.info("Retrieved {} calendar events", events.size());
+                log.debug("Получено {} событий календаря", events.size());
                 return events;
             }
 
         } catch (Exception e) {
-            log.error("Failed to get upcoming events: {}", e.getMessage());
-            log.debug("Full error details", e);
-            throw new RuntimeException("Failed to fetch calendar events", e);
+            log.error("Ошибка получения событий: {}", e.getMessage());
+            throw new RuntimeException("Ошибка получения событий календаря", e);
         }
     }
 
     private List<CalendarEvent> parseEvents(InputStream icalStream) throws Exception {
-        // 1. Читаем ответ как строку
         String xmlResponse = IOUtils.toString(icalStream, StandardCharsets.UTF_8);
-        log.debug("Parsing XML response ({} bytes)", xmlResponse.length());
+        log.debug("Парсинг XML ответа ({} байт)", xmlResponse.length());
 
-        if (log.isTraceEnabled()) {
-            log.trace("Raw XML response:\n{}", xmlResponse);
-        }
-
-        // 2. Создаем XML парсер с поддержкой namespace
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         DocumentBuilder builder = factory.newDocumentBuilder();
 
-        // 3. Парсим XML с обработкой ошибок
         Document doc;
         try {
-            // Удаляем BOM если есть и другие невидимые символы
             String cleanXml = xmlResponse.replace("\uFEFF", "").trim();
             doc = builder.parse(new InputSource(new StringReader(cleanXml)));
         } catch (Exception e) {
-            log.error("Failed to parse XML: {}", e.getMessage());
-            log.debug("Problematic XML content", e);
-            throw new RuntimeException("Failed to parse XML: " + e.getMessage(), e);
+            log.error("Ошибка парсинга XML: {}", e.getMessage());
+            throw new RuntimeException("Ошибка парсинга XML: " + e.getMessage(), e);
         }
 
-        // 4. Проверяем результат парсинга
         if (doc == null || doc.getDocumentElement() == null) {
-            throw new RuntimeException("Invalid XML document structure");
+            throw new RuntimeException("Неверная структура XML документа");
         }
 
-        // 5. Ищем все ответы (response)
         NodeList responseNodes = doc.getElementsByTagNameNS("DAV:", "response");
         List<CalendarEvent> events = new ArrayList<>();
         CalendarBuilder calendarBuilder = new CalendarBuilder();
 
-        // 6. Обрабатываем каждый response
-        log.debug("Processing {} XML response nodes", responseNodes.getLength());
+        log.debug("Обработка {} XML узлов ответа", responseNodes.getLength());
 
         for (int i = 0; i < responseNodes.getLength(); i++) {
             Node responseNode = responseNodes.item(i);
@@ -162,7 +143,6 @@ public class YandexCalDavService {
 
             for (int j = 0; j < calendarDataNodes.getLength(); j++) {
                 String icalContent = calendarDataNodes.item(j).getTextContent();
-                // Чистим и нормализуем iCalendar данные
                 try {
                     icalContent = icalContent.trim()
                             .replaceAll("\r", "")
@@ -170,11 +150,6 @@ public class YandexCalDavService {
 
                     if (icalContent.isEmpty()) continue;
 
-                    log.trace("Processing iCalendar block #{}-{}", i + 1, j + 1);
-                    if (log.isTraceEnabled()) {
-                        log.trace("iCalendar content:\n{}", icalContent);
-                    }
-                    // Парсим iCalendar
                     Calendar calendar = calendarBuilder.build(new StringReader(icalContent));
                     List<CalendarEvent> blockEvents = calendar.getComponents(Component.VEVENT).stream()
                             .map(c -> (VEvent) c)
@@ -182,47 +157,34 @@ public class YandexCalDavService {
                             .collect(Collectors.toList());
 
                     events.addAll(blockEvents);
-                    log.debug("Parsed {} events from block #{}-{}", blockEvents.size(), i + 1, j + 1);
+                    log.debug("Распарсено {} событий из блока #{}-{}", blockEvents.size(), i + 1, j + 1);
 
                 } catch (Exception e) {
-                    log.warn("Failed to parse iCalendar block #{}-{}: {}", i + 1, j + 1, e.getMessage());
-                    if (log.isDebugEnabled()) {
-                        log.debug("Problematic iCalendar content:\n{}", icalContent, e);
-                    }
+                    log.warn("Ошибка парсинга iCalendar блока #{}-{}: {}", i + 1, j + 1, e.getMessage());
                 }
             }
         }
 
-        log.info("Successfully parsed {} total events", events.size());
+        log.debug("Успешно распарсено {} событий", events.size());
         return events;
     }
 
     private CalendarEvent convertEvent(VEvent vEvent) {
-        ZoneId serverZone = ZoneId.of("Europe/Moscow"); // Указываем явно московское время
+        ZoneId serverZone = ZoneId.of("Europe/Moscow");
 
-        String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Untitled";
+        String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия";
 
-        if (log.isTraceEnabled()) {
-            log.trace("Event details - Start: {}, End: {}",
-                    vEvent.getStartDate() != null ? vEvent.getStartDate().getDate() : "null",
-                    vEvent.getEndDate() != null ? vEvent.getEndDate().getDate() : "null");
-        }
-
-        // 1. Основные обязательные поля
         CalendarEvent event = new CalendarEvent();
 
         event.setId(vEvent.getUid().getValue());
-
         event.setTitle(title);
 
-        // 2. Преобразование дат (с обработкой временных зон)
         if (vEvent.getStartDate() != null && vEvent.getStartDate().getDate() != null) {
             event.setStart(vEvent.getStartDate().getDate().toInstant()
                     .atZone(serverZone)
                     .toLocalDateTime());
         }
 
-        // 3. Опциональные поля (с проверкой на null)
         if (vEvent.getEndDate() != null && vEvent.getEndDate().getDate() != null) {
             event.setEnd(vEvent.getEndDate().getDate().toInstant()
                     .atZone(serverZone)
@@ -237,7 +199,6 @@ public class YandexCalDavService {
             event.setUrl(vEvent.getUrl().getValue());
         }
 
-        // 4. Локация (если есть)
         if (vEvent.getLocation() != null) {
             CalendarEvent.Location location = new CalendarEvent.Location();
             location.setTitle(vEvent.getLocation().getValue());
@@ -253,7 +214,7 @@ public class YandexCalDavService {
     }
 
     public void testCalDavConnection() throws Exception {
-        log.debug("Testing CalDAV connection to {}", caldavUrl);
+        log.debug("Тестирование CalDAV подключения к {}", caldavUrl);
 
         HttpPropfind request = new HttpPropfind(URI.create(caldavUrl));
         request.setHeader("Depth", "0");
@@ -262,22 +223,20 @@ public class YandexCalDavService {
             int statusCode = response.getStatusLine().getStatusCode();
 
             if (statusCode == 207) {
-                log.debug("CalDAV connection test successful (HTTP 207)");
+                log.debug("Тест CalDAV подключения успешен (HTTP 207)");
                 return;
             }
 
             String responseBody = EntityUtils.toString(response.getEntity());
-            log.error("CalDAV test failed. Status: {}", statusCode);
-            log.debug("Response body: {}", responseBody);
+            log.error("Тест CalDAV провален. Статус: {}", statusCode);
 
             throw new RuntimeException(
-                    "CalDAV test failed. Status: " + statusCode +
-                            ", Response: " + responseBody
+                    "Тест CalDAV провален. Статус: " + statusCode +
+                            ", Ответ: " + responseBody
             );
         } catch (IOException e) {
-            log.error("CalDAV connection error: {}", e.getMessage());
-            log.debug("Connection error details", e);
-            throw new RuntimeException("CalDAV connection error: " + e.getMessage(), e);
+            log.error("Ошибка CalDAV подключения: {}", e.getMessage());
+            throw new RuntimeException("Ошибка CalDAV подключения: " + e.getMessage(), e);
         }
     }
 }
