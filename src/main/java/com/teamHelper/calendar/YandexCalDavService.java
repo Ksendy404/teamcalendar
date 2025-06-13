@@ -111,7 +111,14 @@ public class YandexCalDavService {
                 }
 
                 List<CalendarEvent> events = parseEvents(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
-                log.debug("Получено {} событий календаря", events.size());
+                log.info("📅 Получено {} событий из календаря", events.size());
+
+                if (log.isDebugEnabled() && !events.isEmpty()) {
+                    events.forEach(event ->
+                            log.debug("📝 Событие: '{}' запланировано на {}", event.getTitle(), event.getStart())
+                    );
+                }
+
                 return events;
             }
 

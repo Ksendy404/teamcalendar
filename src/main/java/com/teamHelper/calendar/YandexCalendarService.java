@@ -15,7 +15,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static com.teamHelper.calendar.CalendarConstants.*;
+import static com.teamHelper.calendar.CalendarConstants.CHECK_INTERVAL_MINUTES;
+import static com.teamHelper.calendar.CalendarConstants.NOTIFY_BEFORE_MINUTES;
 
 @Slf4j
 @Service
@@ -25,6 +26,10 @@ public class YandexCalendarService {
     private final YandexCalDavService calDavService;
     private final BotComponent bot;
     private final Set<String> notifiedEvents = new HashSet<>();
+
+    // Рабочие часы
+    private static final LocalTime WORK_START = LocalTime.of(9, 0);
+    private static final LocalTime WORK_END = LocalTime.of(18, 0);
 
     @Scheduled(fixedRate = CHECK_INTERVAL_MINUTES * 60 * 1000)
     public void checkUpcomingEvents() {
@@ -43,6 +48,7 @@ public class YandexCalendarService {
             }
 
             long notifiedCount = events.stream()
+                    .peek(event -> log.debug("🔍 Проверяю событие: '{}' на {}", event.getTitle(), event.getStart()))
                     .mapToLong(event -> processEvent(event) ? 1 : 0)
                     .sum();
 
@@ -58,9 +64,17 @@ public class YandexCalendarService {
 
     private boolean processEvent(CalendarEvent event) {
         if (shouldNotify(event)) {
-            log.info("Отправка уведомления о событии: {}", event.getTitle());
-            bot.sendCalendarNotification(event);
-            return true;
+            log.info("Готовлюсь отправить уведомление о событии: '{}' запланированном на {}",
+                    event.getTitle(), event.getStart());
+
+            try {
+                bot.sendCalendarNotification(event);
+                log.info("✅ Уведомление о событии '{}' успешно отправлено", event.getTitle());
+                return true;
+            } catch (Exception e) {
+                log.error("❌ Ошибка отправки уведомления о событии '{}': {}", event.getTitle(), e.getMessage());
+                return false;
+            }
         }
         return false;
     }
@@ -93,13 +107,13 @@ public class YandexCalendarService {
                     .filter(e -> e.getStart().isAfter(LocalDateTime.now().minusMinutes(5)))
                     .filter(e -> e.getStart().isBefore(LocalDateTime.now().plusMinutes(NOTIFY_BEFORE_MINUTES)))
                     .peek(e -> {
-                        log.info("Найдено пропущенное событие: {} в {}", e.getTitle(), e.getStart());
+                        log.info("🔍 Найдено пропущенное событие: '{}' запланированное на {}", e.getTitle(), e.getStart());
                         processEvent(e);
                     })
                     .count();
 
             if (missedCount > 0) {
-                log.info("Обработано {} пропущенных событий", missedCount);
+                log.info("📋 Обработано {} пропущенных событий", missedCount);
             }
 
         } catch (Exception e) {
