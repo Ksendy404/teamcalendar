@@ -15,8 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static com.teamHelper.calendar.CalendarConstants.CHECK_INTERVAL_MINUTES;
-import static com.teamHelper.calendar.CalendarConstants.NOTIFY_BEFORE_MINUTES;
+import static com.teamHelper.calendar.CalendarConstants.*;
 
 @Slf4j
 @Service
@@ -26,10 +25,6 @@ public class YandexCalendarService {
     private final YandexCalDavService calDavService;
     private final BotComponent bot;
     private final Set<String> notifiedEvents = new HashSet<>();
-
-    // Рабочие часы
-    private static final LocalTime WORK_START = LocalTime.of(9, 0);
-    private static final LocalTime WORK_END = LocalTime.of(18, 0);
 
     @Scheduled(fixedRate = CHECK_INTERVAL_MINUTES * 60 * 1000)
     public void checkUpcomingEvents() {
