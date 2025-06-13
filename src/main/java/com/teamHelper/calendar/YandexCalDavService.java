@@ -11,6 +11,7 @@ import net.fortuna.ical4j.model.component.VEvent;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.BasicCredentialsProvider;
@@ -64,11 +65,22 @@ public class YandexCalDavService {
         this.username = username;
         this.password = password;
         this.zoneId = ZoneId.of("Europe/Moscow");
+
+        // Настройка RequestConfig для игнорирования cookie ошибок
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(30000)
+                .setSocketTimeout(30000)
+                .setConnectionRequestTimeout(30000)
+                .build();
+
         this.client = HttpClients.custom()
                 .setDefaultCredentialsProvider(new BasicCredentialsProvider() {{
                     setCredentials(AuthScope.ANY,
                             new UsernamePasswordCredentials(username, password));
                 }})
+                .setDefaultRequestConfig(requestConfig)
+                // Отключаем обработку cookies для избежания предупреждений
+                .disableCookieManagement()
                 .build();
     }
 
