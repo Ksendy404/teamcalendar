@@ -7,6 +7,8 @@ import jakarta.annotation.PreDestroy;
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.model.Calendar;
 import net.fortuna.ical4j.model.Component;
+import net.fortuna.ical4j.model.PeriodList;
+import net.fortuna.ical4j.model.Property;
 import net.fortuna.ical4j.model.component.VEvent;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.auth.AuthScope;
@@ -41,6 +43,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -155,6 +158,10 @@ public class YandexCalDavService {
 
         log.debug("Обработка {} XML узлов ответа", responseNodes.getLength());
 
+        // Определяем период для разворачивания повторяющихся событий
+        LocalDateTime periodStart = LocalDateTime.now().minusDays(1);
+        LocalDateTime periodEnd = LocalDateTime.now().plusDays(1);
+
         for (int i = 0; i < responseNodes.getLength(); i++) {
             Node responseNode = responseNodes.item(i);
             NodeList calendarDataNodes = ((Element) responseNode)
@@ -170,10 +177,9 @@ public class YandexCalDavService {
                     if (icalContent.isEmpty()) continue;
 
                     Calendar calendar = calendarBuilder.build(new StringReader(icalContent));
-                    List<CalendarEvent> blockEvents = calendar.getComponents(Component.VEVENT).stream()
-                            .map(c -> (VEvent) c)
-                            .map(this::convertEvent)
-                            .collect(Collectors.toList());
+
+                    // Разворачиваем повторяющиеся события
+                    List<CalendarEvent> blockEvents = expandRecurringEvents(calendar, periodStart, periodEnd);
 
                     events.addAll(blockEvents);
                     log.debug("Распарсено {} событий из блока #{}-{}", blockEvents.size(), i + 1, j + 1);
@@ -186,6 +192,115 @@ public class YandexCalDavService {
 
         log.debug("Успешно распарсено {} событий", events.size());
         return events;
+    }
+
+    private List<CalendarEvent> expandRecurringEvents(Calendar calendar, LocalDateTime periodStart, LocalDateTime periodEnd) {
+        List<CalendarEvent> expandedEvents = new ArrayList<>();
+
+        // Конвертируем LocalDateTime в ical4j Period
+        ZoneId zoneId = ZoneId.of("Europe/Moscow");
+        net.fortuna.ical4j.model.DateTime icalStart = new net.fortuna.ical4j.model.DateTime(
+                Date.from(periodStart.atZone(zoneId).toInstant()));
+        net.fortuna.ical4j.model.DateTime icalEnd = new net.fortuna.ical4j.model.DateTime(
+                Date.from(periodEnd.atZone(zoneId).toInstant()));
+
+        net.fortuna.ical4j.model.Period period = new net.fortuna.ical4j.model.Period(icalStart, icalEnd);
+
+        for (Object component : calendar.getComponents(Component.VEVENT)) {
+            VEvent vEvent = (VEvent) component;
+
+            try {
+                // Проверяем, есть ли правило повторения
+                if (vEvent.getProperty(Property.RRULE) != null) {
+                    log.debug("🔄 Найдено повторяющееся событие: '{}', разворачиваем для периода {} - {}",
+                            vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия",
+                            periodStart, periodEnd);
+
+                    // Получаем все экземпляры события в указанном периоде
+                    PeriodList periodList = vEvent.calculateRecurrenceSet(period);
+
+                    for (Object periodObj : periodList) {
+                        net.fortuna.ical4j.model.Period eventPeriod = (net.fortuna.ical4j.model.Period) periodObj;
+
+                        // Создаем копию события для каждого повторения
+                        CalendarEvent expandedEvent = convertEventWithCustomTime(
+                                vEvent,
+                                eventPeriod.getStart(),
+                                eventPeriod.getEnd());
+                        expandedEvents.add(expandedEvent);
+
+                        log.debug("📅 Развернуто повторение события '{}' на {}",
+                                expandedEvent.getTitle(), expandedEvent.getStart());
+                    }
+                } else {
+                    // Обычное событие без повторений
+                    CalendarEvent singleEvent = convertEvent(vEvent);
+                    expandedEvents.add(singleEvent);
+                    log.debug("📅 Обычное событие: '{}' на {}", singleEvent.getTitle(), singleEvent.getStart());
+                }
+            } catch (Exception e) {
+                log.warn("Ошибка разворачивания события '{}': {}",
+                        vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия",
+                        e.getMessage());
+
+                // В случае ошибки добавляем событие как обычное
+                try {
+                    CalendarEvent fallbackEvent = convertEvent(vEvent);
+                    expandedEvents.add(fallbackEvent);
+                } catch (Exception e2) {
+                    log.error("Критическая ошибка конвертации события: {}", e2.getMessage());
+                }
+            }
+        }
+
+        return expandedEvents;
+    }
+
+    private CalendarEvent convertEventWithCustomTime(VEvent vEvent, net.fortuna.ical4j.model.DateTime startTime,
+                                                     net.fortuna.ical4j.model.DateTime endTime) {
+        ZoneId serverZone = ZoneId.of("Europe/Moscow");
+
+        String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия";
+
+        CalendarEvent event = new CalendarEvent();
+
+        // Создаем уникальный ID для каждого повторения
+        String baseId = vEvent.getUid().getValue();
+        String uniqueId = baseId + "_" + startTime.getTime();
+        event.setId(uniqueId);
+
+        event.setTitle(title);
+
+        // Используем переданное время вместо времени из оригинального события
+        if (startTime != null) {
+            LocalDateTime startDateTime = startTime.toInstant()
+                    .atZone(serverZone)
+                    .toLocalDateTime();
+            event.setStart(startDateTime);
+        }
+
+        if (endTime != null) {
+            LocalDateTime endDateTime = endTime.toInstant()
+                    .atZone(serverZone)
+                    .toLocalDateTime();
+            event.setEnd(endDateTime);
+        }
+
+        if (vEvent.getDescription() != null) {
+            event.setDescription(vEvent.getDescription().getValue());
+        }
+
+        if (vEvent.getUrl() != null) {
+            event.setUrl(vEvent.getUrl().getValue());
+        }
+
+        if (vEvent.getLocation() != null) {
+            CalendarEvent.Location location = new CalendarEvent.Location();
+            location.setTitle(vEvent.getLocation().getValue());
+            event.setLocation(location);
+        }
+
+        return event;
     }
 
     private CalendarEvent convertEvent(VEvent vEvent) {
