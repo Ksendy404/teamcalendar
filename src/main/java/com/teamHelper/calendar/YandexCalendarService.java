@@ -67,13 +67,13 @@ public class YandexCalendarService {
             }
 
         } catch (Exception e) {
-            log.error("❌ Ошибка проверки событий: {}", e.getMessage());
+            log.error("Ошибка проверки событий: {}", e.getMessage());
             bot.sendErrorMessage("Ошибка получения событий: " + e.getMessage());
         }
     }
 
     private void logDailyEventsSummary(List<CalendarEvent> events) {
-        log.info("📅 События на сегодня ({} событий):", events.size());
+        log.info("События на сегодня ({} событий):", events.size());
 
         events.stream()
                 .filter(event -> event.getStart() != null)
@@ -86,15 +86,15 @@ public class YandexCalendarService {
 
     private boolean processEvent(CalendarEvent event) {
         if (shouldNotify(event)) {
-            log.info("📬 Отправляю уведомление: '{}' (начало в {})",
+            log.info("Отправляю уведомление: '{}' (начало в {})",
                     event.getTitle(), event.getStart().format(TIME_FORMATTER));
 
             try {
                 bot.sendCalendarNotification(event);
-                log.info("✅ Уведомление отправлено: '{}'", event.getTitle());
+                log.info("Уведомление отправлено: '{}'", event.getTitle());
                 return true;
             } catch (Exception e) {
-                log.error("❌ Ошибка отправки уведомления '{}': {}", event.getTitle(), e.getMessage());
+                log.error("Ошибка отправки уведомления '{}': {}", event.getTitle(), e.getMessage());
                 return false;
             }
         }
@@ -108,9 +108,9 @@ public class YandexCalendarService {
 
         try {
             calDavService.testCalDavConnection();
-            log.info("✅ CalDAV подключение успешно");
+            log.info("CalDAV подключение успешно");
         } catch (Exception e) {
-            log.error("❌ Ошибка подключения CalDAV: {}", e.getMessage());
+            log.error("Ошибка подключения CalDAV: {}", e.getMessage());
             bot.sendErrorMessage("Ошибка подключения к CalDAV: " + e.getMessage());
         }
 
@@ -129,17 +129,17 @@ public class YandexCalendarService {
                     .filter(e -> e.getStart().isAfter(LocalDateTime.now().minusMinutes(5)))
                     .filter(e -> e.getStart().isBefore(LocalDateTime.now().plusMinutes(NOTIFY_BEFORE_MINUTES)))
                     .peek(e -> {
-                        log.info("⏰ Пропущенное событие: '{}' ({})", e.getTitle(), e.getStart().format(TIME_FORMATTER));
+                        log.info("Пропущенное событие: '{}' ({})", e.getTitle(), e.getStart().format(TIME_FORMATTER));
                         processEvent(e);
                     })
                     .count();
 
             if (missedCount > 0) {
-                log.info("📋 Обработано {} пропущенных событий", missedCount);
+                log.info("Обработано {} пропущенных событий", missedCount);
             }
 
         } catch (Exception e) {
-            log.error("❌ Ошибка проверки пропущенных событий: {}", e.getMessage());
+            log.error("Ошибка проверки пропущенных событий: {}", e.getMessage());
             bot.sendErrorMessage("Ошибка проверки пропущенных событий: " + e.getMessage());
         }
     }
