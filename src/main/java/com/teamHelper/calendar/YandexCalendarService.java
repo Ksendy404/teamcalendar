@@ -151,10 +151,13 @@ public class YandexCalendarService {
 
         LocalDateTime now = LocalDateTime.now();
         Duration timeUntilEvent = Duration.between(now, event.getStart());
-        long minutes = timeUntilEvent.toMinutes();
 
+        long totalSeconds = timeUntilEvent.getSeconds();
+
+        // Проверяем, что событие в будущем и до него осталось ровно 5 минут или меньше
         boolean shouldNotify = !timeUntilEvent.isNegative()
-                && minutes <= NOTIFY_BEFORE_MINUTES;
+                && totalSeconds <= (NOTIFY_BEFORE_MINUTES * 60)
+                && totalSeconds > ((NOTIFY_BEFORE_MINUTES - 1) * 60);
 
         if (shouldNotify) {
             notifiedEvents.add(event.getId());
