@@ -45,7 +45,6 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class YandexCalDavService {
@@ -102,8 +101,6 @@ public class YandexCalDavService {
             String xmlBody = calendarQueryBuilder.buildCalendarQuery(start, end);
             request.setEntity(new StringEntity(xmlBody, StandardCharsets.UTF_8));
 
-            log.debug("Отправка CalDAV REPORT запроса к: {}", calendarUrl);
-
             try (CloseableHttpResponse response = client.execute(request)) {
                 String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
                 int statusCode = response.getStatusLine().getStatusCode();
@@ -114,12 +111,10 @@ public class YandexCalDavService {
                 }
 
                 List<CalendarEvent> events = parseEvents(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
-                log.info("📅 Получено {} событий из календаря", events.size());
 
+                // Логируем только если есть события и уровень DEBUG
                 if (log.isDebugEnabled() && !events.isEmpty()) {
-                    events.forEach(event ->
-                            log.debug("📝 Событие: '{}' запланировано на {}", event.getTitle(), event.getStart())
-                    );
+                    log.debug("Получено {} событий из календаря", events.size());
                 }
 
                 return events;
@@ -133,7 +128,6 @@ public class YandexCalDavService {
 
     private List<CalendarEvent> parseEvents(InputStream icalStream) throws Exception {
         String xmlResponse = IOUtils.toString(icalStream, StandardCharsets.UTF_8);
-        log.debug("Парсинг XML ответа ({} байт)", xmlResponse.length());
 
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
@@ -156,9 +150,6 @@ public class YandexCalDavService {
         List<CalendarEvent> events = new ArrayList<>();
         CalendarBuilder calendarBuilder = new CalendarBuilder();
 
-        log.debug("Обработка {} XML узлов ответа", responseNodes.getLength());
-
-        // Определяем период для разворачивания повторяющихся событий
         LocalDateTime periodStart = LocalDateTime.now().minusDays(1);
         LocalDateTime periodEnd = LocalDateTime.now().plusDays(1);
 
@@ -180,9 +171,7 @@ public class YandexCalDavService {
 
                     // Разворачиваем повторяющиеся события
                     List<CalendarEvent> blockEvents = expandRecurringEvents(calendar, periodStart, periodEnd);
-
                     events.addAll(blockEvents);
-                    log.debug("Распарсено {} событий из блока #{}-{}", blockEvents.size(), i + 1, j + 1);
 
                 } catch (Exception e) {
                     log.warn("Ошибка парсинга iCalendar блока #{}-{}: {}", i + 1, j + 1, e.getMessage());
@@ -190,14 +179,12 @@ public class YandexCalDavService {
             }
         }
 
-        log.debug("Успешно распарсено {} событий", events.size());
         return events;
     }
 
     private List<CalendarEvent> expandRecurringEvents(Calendar calendar, LocalDateTime periodStart, LocalDateTime periodEnd) {
         List<CalendarEvent> expandedEvents = new ArrayList<>();
 
-        // Конвертируем LocalDateTime в ical4j Period
         ZoneId zoneId = ZoneId.of("Europe/Moscow");
         net.fortuna.ical4j.model.DateTime icalStart = new net.fortuna.ical4j.model.DateTime(
                 Date.from(periodStart.atZone(zoneId).toInstant()));
@@ -212,9 +199,11 @@ public class YandexCalDavService {
             try {
                 // Проверяем, есть ли правило повторения
                 if (vEvent.getProperty(Property.RRULE) != null) {
-                    log.debug("🔄 Найдено повторяющееся событие: '{}', разворачиваем для периода {} - {}",
-                            vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия",
-                            periodStart, periodEnd);
+                    // Повторяющееся событие - логируем только в DEBUG
+                    if (log.isDebugEnabled()) {
+                        log.debug("Разворачиваем повторяющееся событие: '{}'",
+                                vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия");
+                    }
 
                     // Получаем все экземпляры события в указанном периоде
                     PeriodList periodList = vEvent.calculateRecurrenceSet(period);
@@ -228,15 +217,11 @@ public class YandexCalDavService {
                                 eventPeriod.getStart(),
                                 eventPeriod.getEnd());
                         expandedEvents.add(expandedEvent);
-
-                        log.debug("📅 Развернуто повторение события '{}' на {}",
-                                expandedEvent.getTitle(), expandedEvent.getStart());
                     }
                 } else {
                     // Обычное событие без повторений
                     CalendarEvent singleEvent = convertEvent(vEvent);
                     expandedEvents.add(singleEvent);
-                    log.debug("📅 Обычное событие: '{}' на {}", singleEvent.getTitle(), singleEvent.getStart());
                 }
             } catch (Exception e) {
                 log.warn("Ошибка разворачивания события '{}': {}",
