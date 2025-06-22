@@ -1,47 +1,87 @@
 package com.teamHelper.bot;
 
 import com.teamHelper.model.CalendarEvent;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
+
+import jakarta.annotation.PostConstruct;
 
 @Component
+@Slf4j
 public class BotComponent extends TelegramLongPollingBot {
 
-    private static final Logger log = LoggerFactory.getLogger(BotComponent.class);
-
-    @Autowired
-    private MessageBuilder messageBuilder;
-
-    @Value("${telegram.bot.username}")
+    @Value("${TELEGRAM_BOT_USERNAME}")
     private String botUsername;
 
-    @Value("${telegram.bot.token}")
+    @Value("${TELEGRAM_BOT_TOKEN}")
     private String botToken;
 
-    @Value("${telegram.admin.chatId}")
+    @Value("${TELEGRAM_BOT_ADMIN_CHAT_ID}")
     private String adminChatId;
 
-    @Value("${telegram.notification.chatId}")
-    private String notificationChatId;
+    @Value("${TELEGRAM_BOT_ERROR_CHAT_ID}")
+    private String errorChatId;
 
-    @Value("${telegram.error.chatId}")
-    private String errorChatID;
-
-    public BotComponent(@Value("${telegram.bot.token}") String botToken) {
+    public BotComponent(@Value("${telegram.bot.token:}") String botToken) {
         super(botToken);
-        log.info("Бот инициализирован");
+        if (botToken != null && botToken.length() >= 6) {
+            System.out.println("🟢 Бот инициализирован. Токен: " + botToken.substring(0, 6) + "...");
+        } else {
+            System.out.println("⚠️ Бот инициализирован. Токен не задан или слишком короткий");
+        }
+    }
+
+    @PostConstruct
+    public void register() {
+        try {
+            TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
+            api.registerBot(this);
+            log.info("✅ Бот зарегистрирован в Telegram API");
+        } catch (TelegramApiException e) {
+            log.error("❌ Ошибка регистрации бота: {}", e.getMessage());
+        }
     }
 
     @Override
     public String getBotUsername() {
         return botUsername;
+    }
+
+    /**
+     * Новый метод для отправки уведомлений в нужный чат
+     */
+    public void sendCalendarNotification(CalendarEvent event, Long chatId) {
+        String text = "📅 *" + event.getTitle() + "*\n" +
+                "🕒 " + event.getStart().toString();
+
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText(text);
+        message.enableMarkdown(true);
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("❌ Ошибка отправки уведомления в чат {}: {}", chatId, e.getMessage());
+        }
+    }
+
+    public void sendErrorMessage(String error) {
+        SendMessage message = new SendMessage();
+        message.setChatId(errorChatId);
+        message.setText("❗ Ошибка: " + error);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("❌ Ошибка отправки сообщения об ошибке: {}", e.getMessage());
+        }
     }
 
     @Override
@@ -51,60 +91,19 @@ public class BotComponent extends TelegramLongPollingBot {
         }
     }
 
-    // Отправка сообщения об ошибке администраторам
-    public void sendErrorMessage(String errorText) {
-        log.info("🚨 Отправляю сообщение об ошибке администратору: {}", errorText);
-
-        SendMessage message = new SendMessage();
-        message.setChatId(errorChatID);
-        message.setText("❌ Ошибка: " + errorText);
-        try {
-            execute(message);
-            log.info("✅ Сообщение об ошибке доставлено администратору");
-        } catch (TelegramApiException e) {
-            log.error("❌ Критическая ошибка: не удалось отправить сообщение администратору: {}", e.getMessage());
-        }
-    }
-
-    // Отправка уведомления о событии
-    public void sendCalendarNotification(CalendarEvent event) {
-        log.info("🚀 Отправляю уведомление о событии '{}'", event.getTitle());
-
-        SendMessage message = new SendMessage();
-        message.setChatId(notificationChatId);
-        message.setText(messageBuilder.buildEventMessage(event));
-        message.setParseMode("MarkdownV2");
-
-        try {
-            execute(message);
-            log.info("✅ Уведомление о событии '{}' успешно доставлено", event.getTitle());
-        } catch (TelegramApiException e) {
-            log.error("❌ Ошибка отправки уведомления о событии '{}': {}", event.getTitle(), e.getMessage());
-            // Пробуем отправить уведомление об ошибке администратору
-            try {
-                sendErrorMessage("Не удалось отправить уведомление о событии '" + event.getTitle() + "': " + e.getMessage());
-            } catch (Exception adminNotifyError) {
-                log.error("Критическая ошибка: не удалось уведомить администратора об ошибке отправки: {}", adminNotifyError.getMessage());
-            }
-            throw new RuntimeException("Ошибка отправки уведомления о событии", e);
-        }
-    }
-
     private void handleIncomingMessage(Update update) {
         String messageText = update.getMessage().getText();
         long chatId = update.getMessage().getChatId();
 
         String helpText = """
-                Я маленький и такой команды пока что не знаю
-                              
-                """;
+            Я маленький и такой команды пока что не знаю.
+            Доступные команды:
+            /start — приветствие
+            """;
 
         switch (messageText) {
-            case "/start":
-                sendResponse(chatId, "Привет! Я напоминаю о событиях календаря команде");
-                break;
-            default:
-                sendResponse(chatId, helpText);
+            case "/start" -> sendResponse(chatId, "Привет! Я напоминаю о событиях календаря команде.");
+            default -> sendResponse(chatId, helpText);
         }
     }
 

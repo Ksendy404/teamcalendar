@@ -3,14 +3,28 @@ Telegram-бот для уведомлений о событиях календа
 Для использования добавьте файл .env с пропертями
 
 ```
+# Глобальные параметры бота
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_BOT_USERNAME=
 TELEGRAM_BOT_ADMIN_CHAT_ID=
-TELEGRAM_BOT_NOTIFICATION_CHAT_ID=
 TELEGRAM_BOT_ERROR_CHAT_ID=
-CALDAV_URL= Ссылка на caldav yandex для вашей почты 
-CALDAV_USERNAME= почта
-CALDAV_PASS= пароль
+
+# Доступ к Яндекс.Календарю (общий логин/пароль)
+CALDAV_USERNAME=itTeamHelper@yandex.com
+CALDAV_PASS=мой_пароль
+
+# Количество календарей
+CALENDAR_COUNT=2
+
+# Первый календарь (уникальный только URL + чат)
+CALENDAR_1_ID=team-events
+CALENDAR_1_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-32878960/
+CALENDAR_1_CHAT_ID=-1001234567890
+
+# Второй календарь
+CALENDAR_2_ID=project-deadlines
+CALENDAR_2_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-98231298/
+CALENDAR_2_CHAT_ID=-1009876543210
 ```
 
 Для запуска локально используйте 
