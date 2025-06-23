@@ -16,10 +16,8 @@ import java.util.List;
 public class MultiCalendarService {
 
     private final CalendarAccountsProperties accountsProperties;
+    private final YandexCalDavService yandexCalDavService;
 
-    /**
-     * Обходит все календари и возвращает события с привязкой к chatId
-     */
     public List<EventWithChat> getAllEventsForToday() {
         List<EventWithChat> result = new ArrayList<>();
 
@@ -27,13 +25,7 @@ public class MultiCalendarService {
             try {
                 log.debug("🔗 Подключаюсь к календарю {}", account.getId());
 
-                YandexCalDavService service = new YandexCalDavService(
-                        account.getUrl(),
-                        account.getUsername(),
-                        account.getPassword()
-                );
-
-                List<CalendarEvent> events = service.getUpcomingEvents();
+                List<CalendarEvent> events = yandexCalDavService.getUpcomingEvents(account);
 
                 for (CalendarEvent event : events) {
                     result.add(new EventWithChat(event, account.getTelegramChatId()));
@@ -49,8 +41,5 @@ public class MultiCalendarService {
         return result;
     }
 
-    /**
-     * Обёртка для события с Telegram-чатом
-     */
     public record EventWithChat(CalendarEvent event, Long chatId) {}
 }

@@ -1,5 +1,6 @@
 package com.teamHelper.calendar;
 
+import com.teamHelper.config.CalendarAccountConfig;
 import com.teamHelper.config.HttpPropfind;
 import com.teamHelper.config.HttpReport;
 import com.teamHelper.model.CalendarEvent;
@@ -87,14 +88,16 @@ public class YandexCalDavService {
                 .build();
     }
 
-    public List<CalendarEvent> getUpcomingEvents() throws Exception {
+    public List<CalendarEvent> getUpcomingEvents(CalendarAccountConfig account) throws Exception {
         try {
-            LocalDateTime start = LocalDate.now().atTime(9, 0);
-            LocalDateTime end = LocalDate.now().atTime(18, 0);
+            LocalDateTime start = LocalDate.now().atTime(8, 55);
+            LocalDateTime end = LocalDate.now().atTime(20, 0);
 
-            String calendarUrl = caldavUrl.endsWith("/") ? caldavUrl : caldavUrl + "/";
+           // String calendarUrl = caldavUrl.endsWith("/") ? caldavUrl : caldavUrl + "/";
 
-            HttpReport request = new HttpReport(URI.create(calendarUrl));
+            log.debug("📡 Загружаю события из календаря {} → {}", account.getId(), account.getUrl());
+
+            HttpReport request = new HttpReport(URI.create(account.getUrl()));
             request.setHeader("Depth", "1");
             request.setHeader("Content-Type", "text/xml; charset=utf-8");
             request.setHeader("Prefer", "return-minimal");
@@ -115,7 +118,7 @@ public class YandexCalDavService {
 
                 // Логируем только если есть события и уровень DEBUG
                 if (log.isDebugEnabled() && !events.isEmpty()) {
-                    log.debug("Получено {} событий из календаря", events.size());
+                    log.debug("Получено {} событий из календаря {}", events.size(), account.getId());
                 }
 
                 return events;

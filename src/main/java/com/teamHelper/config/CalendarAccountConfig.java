@@ -4,9 +4,7 @@ import lombok.Data;
 
 @Data
 public class CalendarAccountConfig {
-    private String id;
-    private String url;
-    private String username;
-    private String password;
-    private Long telegramChatId;
+    private final String id;
+    private final String url;
+    private final Long telegramChatId;
 }

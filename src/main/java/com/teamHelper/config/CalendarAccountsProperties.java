@@ -1,48 +1,47 @@
 package com.teamHelper.config;
 
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
-
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
-@Data
 @Slf4j
-@Configuration
+@Component
+@Getter
 public class CalendarAccountsProperties {
 
-    @Value("${CALDAV_USERNAME}")
-    private String sharedUsername;
-
-    @Value("${CALDAV_PASS}")
-    private String sharedPassword;
-
-    @Value("${CALENDAR_COUNT}")
-    private int calendarCount;
-
-    @Value("#{systemEnvironment}")
-    private Map<String, String> env;
-
-    private List<CalendarAccountConfig> accounts = new ArrayList<>();
+    private final List<CalendarAccountConfig> accounts = new ArrayList<>();
 
     @PostConstruct
-    public void loadAccounts() {
-        for (int i = 1; i <= calendarCount; i++) {
-            String prefix = "CALENDAR_" + i + "_";
+    public void init() {
+        int count = Integer.parseInt(Optional.ofNullable(System.getenv("CALENDAR_COUNT")).orElse("0"));
 
-            CalendarAccountConfig config = new CalendarAccountConfig();
-            config.setId(env.get(prefix + "ID"));
-            config.setUrl(env.get(prefix + "URL"));
-            config.setUsername(sharedUsername);
-            config.setPassword(sharedPassword);
-            config.setTelegramChatId(Long.parseLong(env.get(prefix + "CHAT_ID")));
+        for (int i = 1; i <= count; i++) {
+            String id = System.getenv("CALENDAR_" + i + "_ID");
+            String url = System.getenv("CALENDAR_" + i + "_URL");
+            String chatIdStr = System.getenv("CALENDAR_" + i + "_CHAT_ID");
 
+            if (id == null || url == null || chatIdStr == null) {
+                log.warn("⚠️ Пропущена конфигурация календаря #{}", i);
+                continue;
+            }
+
+            Long chatId;
+            try {
+                chatId = Long.parseLong(chatIdStr);
+            } catch (NumberFormatException e) {
+                log.warn("⚠️ Неверный формат CHAT_ID для календаря {}: {}", id, chatIdStr);
+                continue;
+            }
+
+            CalendarAccountConfig config = new CalendarAccountConfig(id, url, chatId);
             accounts.add(config);
-            log.info("✅ Загружена конфигурация календаря {} → чат {}", config.getId(), config.getTelegramChatId());
+
+            log.info("✅ Загружена конфигурация календаря {} → чат {}", id, chatId);
         }
     }
 }

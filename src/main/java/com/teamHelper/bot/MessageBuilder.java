@@ -11,7 +11,7 @@ public class MessageBuilder {
     public String buildEventMessage(CalendarEvent event) {
         return String.format(
                 "🔔  %s\n" +
-                "⏰  `%s` \\- `%s`\n\n" +
+                        "⏰  `%s` \\- `%s`\n\n" +
                         "%s" +
                         "%s",
                 escapeMarkdownV2(event.getTitle()),
@@ -24,6 +24,6 @@ public class MessageBuilder {
 
     public String escapeMarkdownV2(String text) {
         if (text == null) return "";
-        return text.replaceAll("([_*\\[\\]()~`>#+=|{}\\.!\\-:])", "\\\\$1");
+        return text.replaceAll("([_\\\\*\\[\\]()~`>#+=|{}.!])", "\\\\$1");
     }
 }

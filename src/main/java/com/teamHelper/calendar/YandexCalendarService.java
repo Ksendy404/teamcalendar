@@ -3,6 +3,8 @@ package com.teamHelper.calendar;
 
 import com.teamHelper.bot.BotComponent;
 import com.teamHelper.calendar.MultiCalendarService.EventWithChat;
+import com.teamHelper.config.CalendarAccountConfig;
+import com.teamHelper.config.CalendarAccountsProperties;
 import com.teamHelper.model.CalendarEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -35,12 +37,29 @@ public class YandexCalendarService {
     private volatile List<EventWithChat> cachedEvents = new ArrayList<>();
     private final Set<String> notifiedEventIds = new HashSet<>();
     private final AtomicBoolean isFirstCheckToday = new AtomicBoolean(true);
+    private final CalendarAccountsProperties calendarAccounts;
+    private final YandexCalDavService calDavService;
+
 
     @PostConstruct
     public void init() {
         log.info("🚀 Старт YandexCalendarService");
-        refreshCalendarCache();
-        checkMissedEvents(); // ±10 минут от текущего момента
+
+        List<CalendarEvent> allEvents = new ArrayList<>();
+
+        for (CalendarAccountConfig account : calendarAccounts.getAccounts()) {
+            try {
+                log.debug("🔗 Подключаюсь к календарю {}", account.getId());
+
+                List<CalendarEvent> events = calDavService.getUpcomingEvents(account);
+
+                allEvents.addAll(events);
+            } catch (Exception e) {
+                log.error("❌ Ошибка при получении событий из календаря {}: {}", account.getId(), e.getMessage(), e);
+            }
+        }
+
+        log.info("♻️ Календарь обновлён: {} событий", allEvents.size());
     }
 
     @Scheduled(cron = "0 */5 8-18 * * MON-FRI") // обновляем кэш каждые 5 мин
