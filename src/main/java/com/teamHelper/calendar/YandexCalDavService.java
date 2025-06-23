@@ -48,6 +48,7 @@ import java.util.List;
 
 @Service
 public class YandexCalDavService {
+
     private static final Logger log = LoggerFactory.getLogger(YandexCalDavService.class);
 
     private final String caldavUrl;

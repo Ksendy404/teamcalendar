@@ -1,7 +1,10 @@
 package com.teamHelper.bot;
 
 import com.teamHelper.model.CalendarEvent;
-import lombok.extern.slf4j.Slf4j;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -11,11 +14,13 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
-import jakarta.annotation.PostConstruct;
-
 @Component
-@Slf4j
 public class BotComponent extends TelegramLongPollingBot {
+
+    private static final Logger log = LoggerFactory.getLogger(BotComponent.class);
+
+    @Autowired
+    private MessageBuilder messageBuilder;
 
     @Value("${TELEGRAM_BOT_USERNAME}")
     private String botUsername;
@@ -58,29 +63,24 @@ public class BotComponent extends TelegramLongPollingBot {
      * Новый метод для отправки уведомлений в нужный чат
      */
     public void sendCalendarNotification(CalendarEvent event, Long chatId) {
-        String text = "📅 *" + event.getTitle() + "*\n" +
-                "🕒 " + event.getStart().toString();
-
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId.toString());
-        message.setText(text);
-        message.enableMarkdown(true);
-
         try {
+            String text = messageBuilder.buildEventMessage(event);
+            SendMessage message = new SendMessage(chatId.toString(), text);
+            message.enableHtml(true);
             execute(message);
         } catch (TelegramApiException e) {
-            log.error("❌ Ошибка отправки уведомления в чат {}: {}", chatId, e.getMessage());
+            sendErrorMessage("Ошибка отправки уведомления: " + e.getMessage());
         }
     }
 
-    public void sendErrorMessage(String error) {
-        SendMessage message = new SendMessage();
-        message.setChatId(errorChatId);
-        message.setText("❗ Ошибка: " + error);
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("❌ Ошибка отправки сообщения об ошибке: {}", e.getMessage());
+    public void sendErrorMessage(String text) {
+        if (errorChatId != null) {
+            try {
+                SendMessage message = new SendMessage(errorChatId, text);
+                execute(message);
+            } catch (TelegramApiException e) {
+                System.err.println("Ошибка при отправке сообщения в чат ошибок: " + e.getMessage());
+            }
         }
     }
 
@@ -96,10 +96,10 @@ public class BotComponent extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
 
         String helpText = """
-            Я маленький и такой команды пока что не знаю.
-            Доступные команды:
-            /start — приветствие
-            """;
+                Я маленький и такой команды пока что не знаю.
+                Доступные команды:
+                /start — приветствие
+                """;
 
         switch (messageText) {
             case "/start" -> sendResponse(chatId, "Привет! Я напоминаю о событиях календаря команде.");

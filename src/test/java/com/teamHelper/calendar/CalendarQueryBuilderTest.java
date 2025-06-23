@@ -2,12 +2,14 @@
 package com.teamHelper.calendar;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Component
 class CalendarQueryBuilderTest {
 
     @Test
