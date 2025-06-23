@@ -11,5 +11,5 @@ public class CalendarConstants {
 
     // Рабочие часы - время работы команды
     public static final LocalTime WORK_START = LocalTime.of(9, 0);
-    public static final LocalTime WORK_END = LocalTime.of(18, 0);
+    public static final LocalTime WORK_END = LocalTime.of(20, 0);
 }
