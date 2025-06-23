@@ -1,3 +1,4 @@
+
 package com.teamHelper.calendar;
 
 import com.teamHelper.bot.BotComponent;
@@ -13,9 +14,9 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -25,86 +26,85 @@ public class YandexCalendarService {
     private final MultiCalendarService multiCalendarService;
     private final BotComponent bot;
 
-    private final int CHECK_INTERVAL_MINUTES = 1;
     private final int NOTIFY_BEFORE_MINUTES = 5;
-    private final LocalTime WORK_START = LocalTime.of(9, 0);
+    private final int POLL_WINDOW_MINUTES = 10;
+    private final LocalTime WORK_START = LocalTime.of(8, 55);
     private final LocalTime WORK_END = LocalTime.of(18, 0);
-
     private final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
-    private final Set<String> notifiedEvents = new HashSet<>();
-    private boolean isFirstCheckToday = true;
+    private volatile List<EventWithChat> cachedEvents = new ArrayList<>();
+    private final Set<String> notifiedEventIds = new HashSet<>();
+    private final AtomicBoolean isFirstCheckToday = new AtomicBoolean(true);
 
     @PostConstruct
     public void init() {
-        log.info("🚀 Запуск многокалендарного сервиса уведомлений");
-
-        LocalTime now = LocalTime.now();
-        if (!now.isBefore(WORK_START) && !now.isAfter(WORK_END)) {
-            checkMissedEvents();
-        }
+        log.info("🚀 Старт YandexCalendarService");
+        refreshCalendarCache();
+        checkMissedEvents(); // ±10 минут от текущего момента
     }
 
-    @Scheduled(fixedRate = CHECK_INTERVAL_MINUTES * 60 * 1000)
-    public void checkEvents() {
+    @Scheduled(cron = "0 */5 8-18 * * MON-FRI") // обновляем кэш каждые 5 мин
+    public void refreshCalendarCache() {
         try {
-            List<EventWithChat> eventsWithChat = multiCalendarService.getAllEventsForToday();
-
-            if (isFirstCheckToday) {
-                logDailyEventsSummary(eventsWithChat);
-                isFirstCheckToday = false;
-            }
-
-            long notifiedCount = eventsWithChat.stream()
-                    .peek(e -> log.debug("🔍 Проверяю: '{}' на {} для чата {}",
-                            e.event().getTitle(), e.event().getStart(), e.chatId()))
-                    .mapToLong(e -> processEvent(e.event(), e.chatId()) ? 1 : 0)
-                    .sum();
-
-            if (notifiedCount > 0) {
-                log.info("📨 Отправлено {} уведомлений", notifiedCount);
-            }
-
+            List<EventWithChat> events = multiCalendarService.getAllEventsForToday();
+            cachedEvents = events;
+            log.info("♻️ Календарь обновлён: {} событий", events.size());
         } catch (Exception e) {
-            log.error("❌ Ошибка при проверке событий: {}", e.getMessage());
-            bot.sendErrorMessage("Ошибка получения событий: " + e.getMessage());
+            log.error("Ошибка обновления календаря: {}", e.getMessage());
         }
     }
 
-    private boolean processEvent(CalendarEvent event, Long chatId) {
-        if (shouldNotify(event)) {
-            log.info("Отправляю: '{}' ({}), чат {}",
-                    event.getTitle(), event.getStart().format(TIME_FORMATTER), chatId);
-
-            try {
-                bot.sendCalendarNotification(event, chatId);
-                return true;
-            } catch (Exception e) {
-                log.error("❌ Ошибка отправки уведомления '{}': {}", event.getTitle(), e.getMessage());
-                return false;
-            }
-        }
-        return false;
-    }
-
-    private boolean shouldNotify(CalendarEvent event) {
-        if (event.getStart() == null || notifiedEvents.contains(event.getId())) {
-            return false;
+    @Scheduled(cron = "0 * 8-18 * * MON-FRI") // проверка каждую минуту
+    public void checkEvents() {
+        if (isFirstCheckToday.getAndSet(false)) {
+            logDailyEventsSummary(cachedEvents);
         }
 
         LocalDateTime now = LocalDateTime.now();
-        Duration timeUntilEvent = Duration.between(now, event.getStart());
 
-        long seconds = timeUntilEvent.getSeconds();
-        boolean shouldNotify = !timeUntilEvent.isNegative()
+        List<EventWithChat> relevant = cachedEvents.stream()
+                .filter(e -> isWithinPollWindow(e.event(), now))
+                .collect(Collectors.toList());
+
+        long sent = relevant.stream()
+                .filter(e -> shouldNotify(e.event(), now))
+                .peek(e -> bot.sendCalendarNotification(e.event(), e.chatId()))
+                .count();
+
+        if (sent > 0) {
+            log.info("📨 Отправлено {} уведомлений", sent);
+        }
+    }
+
+    private boolean isWithinPollWindow(CalendarEvent event, LocalDateTime now) {
+        if (event.getStart() == null) return false;
+        Duration until = Duration.between(now, event.getStart());
+        return !until.isNegative() && until.toMinutes() <= POLL_WINDOW_MINUTES;
+    }
+
+    private boolean shouldNotify(CalendarEvent event, LocalDateTime now) {
+        if (event.getStart() == null || notifiedEventIds.contains(event.getId())) return false;
+
+        Duration until = Duration.between(now, event.getStart());
+        long seconds = until.getSeconds();
+
+        boolean inWindow = !until.isNegative()
                 && seconds <= (NOTIFY_BEFORE_MINUTES * 60)
                 && seconds > ((NOTIFY_BEFORE_MINUTES - 1) * 60);
 
-        if (shouldNotify) {
-            notifiedEvents.add(event.getId());
+        if (inWindow) {
+            notifiedEventIds.add(event.getId());
         }
 
-        return shouldNotify;
+        return inWindow;
+    }
+
+    @Scheduled(cron = "0 0 0 * * ?")
+    public void clearNotifiedCache() {
+        int cleared = notifiedEventIds.size();
+        notifiedEventIds.clear();
+        isFirstCheckToday.set(true);
+        log.info("🧹 Очищен кэш уведомлений: {} записей", cleared);
     }
 
     private void logDailyEventsSummary(List<EventWithChat> events) {
@@ -112,41 +112,28 @@ public class YandexCalendarService {
         events.stream()
                 .map(EventWithChat::event)
                 .filter(e -> e.getStart() != null)
-                .sorted((e1, e2) -> e1.getStart().compareTo(e2.getStart()))
+                .sorted(Comparator.comparing(CalendarEvent::getStart))
                 .forEach(e -> log.info("  • {} — {}", e.getStart().format(TIME_FORMATTER), e.getTitle()));
     }
 
-    @Scheduled(cron = "0 0 0 * * ?")
-    public void clearNotifiedEventsCache() {
-        int cleared = notifiedEvents.size();
-        notifiedEvents.clear();
-        isFirstCheckToday = true;
-        if (cleared > 0) {
-            log.info("🧹 Кеш уведомлений очищен: {} записей", cleared);
-        }
-    }
-
     private void checkMissedEvents() {
-        try {
-            List<EventWithChat> eventsWithChat = multiCalendarService.getAllEventsForToday();
+        LocalDateTime now = LocalDateTime.now();
 
-            long count = eventsWithChat.stream()
-                    .filter(e -> e.event().getStart().isAfter(LocalDateTime.now().minusMinutes(5)))
-                    .filter(e -> e.event().getStart().isBefore(LocalDateTime.now().plusMinutes(NOTIFY_BEFORE_MINUTES)))
-                    .peek(e -> {
-                        log.info("⏰ Пропущенное событие: '{}' ({})",
-                                e.event().getTitle(), e.event().getStart().format(TIME_FORMATTER));
-                        processEvent(e.event(), e.chatId());
-                    })
-                    .count();
+        long count = cachedEvents.stream()
+                .filter(e -> {
+                    LocalDateTime start = e.event().getStart();
+                    return start != null &&
+                            !start.isBefore(now.minusMinutes(POLL_WINDOW_MINUTES)) &&
+                            !start.isAfter(now.plusMinutes(NOTIFY_BEFORE_MINUTES));
+                })
+                .peek(e -> {
+                    bot.sendCalendarNotification(e.event(), e.chatId());
+                    notifiedEventIds.add(e.event().getId());
+                })
+                .count();
 
-            if (count > 0) {
-                log.info("🔁 Обработано {} пропущенных событий", count);
-            }
-
-        } catch (Exception e) {
-            log.error("Ошибка при проверке пропущенных событий: {}", e.getMessage());
-            bot.sendErrorMessage("Ошибка при проверке пропущенных событий: " + e.getMessage());
+        if (count > 0) {
+            log.info("🔁 Пропущено и доставлено {} событий", count);
         }
     }
 }
