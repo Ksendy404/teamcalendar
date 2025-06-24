@@ -10,6 +10,6 @@ public class CalendarConstants {
     public static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     // Рабочие часы - время работы команды
-    public static final LocalTime WORK_START = LocalTime.of(9, 0);
-    public static final LocalTime WORK_END = LocalTime.of(20, 0);
+    public static final LocalTime WORK_START = LocalTime.of(8, 55);
+    public static final LocalTime WORK_END = LocalTime.of(18, 0);
 }

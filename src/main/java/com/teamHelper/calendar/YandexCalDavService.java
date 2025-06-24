@@ -90,12 +90,10 @@ public class YandexCalDavService {
 
     public List<CalendarEvent> getUpcomingEvents(CalendarAccountConfig account) throws Exception {
         try {
-            LocalDateTime start = LocalDate.now().atTime(8, 55);
-            LocalDateTime end = LocalDate.now().atTime(20, 0);
+            LocalDateTime start = LocalDate.now().atTime(CalendarConstants.WORK_START);
+            LocalDateTime end = LocalDate.now().atTime(CalendarConstants.WORK_END);
 
-           // String calendarUrl = caldavUrl.endsWith("/") ? caldavUrl : caldavUrl + "/";
-
-            log.debug("📡 Загружаю события из календаря {} → {}", account.getId(), account.getUrl());
+            log.debug("Загружаю события из календаря {} → {}", account.getId(), account.getUrl());
 
             HttpReport request = new HttpReport(URI.create(account.getUrl()));
             request.setHeader("Depth", "1");
@@ -115,11 +113,6 @@ public class YandexCalDavService {
                 }
 
                 List<CalendarEvent> events = parseEvents(new ByteArrayInputStream(responseBody.getBytes(StandardCharsets.UTF_8)));
-
-                // Логируем только если есть события и уровень DEBUG
-                if (log.isDebugEnabled() && !events.isEmpty()) {
-                    log.debug("Получено {} событий из календаря {}", events.size(), account.getId());
-                }
 
                 return events;
             }

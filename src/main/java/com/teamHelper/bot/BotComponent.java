@@ -48,9 +48,9 @@ public class BotComponent extends TelegramLongPollingBot {
         try {
             TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
             api.registerBot(this);
-            log.info("✅ Бот зарегистрирован в Telegram API");
+            log.info("Бот зарегистрирован в Telegram API");
         } catch (TelegramApiException e) {
-            log.error("❌ Ошибка регистрации бота: {}", e.getMessage());
+            log.error("Ошибка регистрации бота: {}", e.getMessage());
         }
     }
 
@@ -67,6 +67,7 @@ public class BotComponent extends TelegramLongPollingBot {
             String text = messageBuilder.buildEventMessage(event);
             SendMessage message = new SendMessage(chatId.toString(), text);
             message.enableHtml(true);
+            message.setParseMode("MarkdownV2");
             execute(message);
         } catch (TelegramApiException e) {
             sendErrorMessage("Ошибка отправки уведомления: " + e.getMessage());
