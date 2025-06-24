@@ -30,10 +30,10 @@ public class YandexCalendarService {
     private final BotComponent bot;
     private final List<CalendarEvent> cachedEvents = new CopyOnWriteArrayList<>();
 
-    @Scheduled(cron = "0 */5 * * * *") // каждые 5 минут
+    @Scheduled(cron = "0 */2 * * * *") // каждые 2 минуты
     public void updateCalendar() {
         if (LocalTime.now().isAfter(WORK_END)) {
-            log.info("⏳ После " + WORK_END + " — не проверяем события");
+          //  log.info("⏳ После " + WORK_END + " — не проверяем события");
             return;
         }
 
