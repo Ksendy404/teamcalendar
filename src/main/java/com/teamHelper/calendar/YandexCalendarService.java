@@ -43,7 +43,7 @@ public class YandexCalendarService {
 
         for (var account : calendarAccounts.getAccounts()) {
             try {
-                log.debug("🔗 Подключаюсь к календарю {}", account.getId());
+                log.debug("Подключаюсь к календарю {}", account.getId());
 
                 List<CalendarEvent> events = calDavService.getUpcomingEvents(account);
                 events = events.stream()

@@ -39,7 +39,7 @@ public class BotComponent extends TelegramLongPollingBot {
         if (botToken != null && botToken.length() >= 6) {
             System.out.println("🟢 Бот инициализирован. Токен: " + botToken.substring(0, 6) + "...");
         } else {
-            System.out.println("⚠️ Бот инициализирован. Токен не задан или слишком короткий");
+            System.out.println("Бот инициализирован. Токен не задан или слишком короткий");
         }
     }
 
@@ -60,7 +60,7 @@ public class BotComponent extends TelegramLongPollingBot {
     }
 
     /**
-     * Новый метод для отправки уведомлений в нужный чат
+     * Метод для отправки уведомлений в нужный чат
      */
     public void sendCalendarNotification(CalendarEvent event, Long chatId) {
         try {

@@ -23,7 +23,7 @@ public class MultiCalendarService {
 
         for (CalendarAccountConfig account : accountsProperties.getAccounts()) {
             try {
-                log.debug("🔗 Подключаюсь к календарю {}", account.getId());
+                log.debug("Подключаюсь к календарю {}", account.getId());
 
                 List<CalendarEvent> events = yandexCalDavService.getUpcomingEvents(account);
 
@@ -31,10 +31,10 @@ public class MultiCalendarService {
                     result.add(new EventWithChat(event, account.getTelegramChatId()));
                 }
 
-                log.info("✅ Получено {} событий из календаря {}", events.size(), account.getId());
+                log.info("Получено {} событий из календаря {}", events.size(), account.getId());
 
             } catch (Exception e) {
-                log.error("❌ Ошибка при получении событий из календаря {}: {}", account.getId(), e.getMessage());
+                log.error("Ошибка при получении событий из календаря {}: {}", account.getId(), e.getMessage());
             }
         }
 
