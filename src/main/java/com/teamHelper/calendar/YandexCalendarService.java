@@ -35,12 +35,13 @@ public class YandexCalendarService {
 
     @Scheduled(cron = "0 * * * * *") // Каждую минуту
     public void updateCalendar() {
-        if (LocalTime.now().isAfter(WORK_END)) {
-          //  log.info("⏳ После " + WORK_END + " — не проверяем события");
+        LocalTime now = LocalTime.now();
+        if (now.isBefore(WORK_START) || now.isAfter(WORK_END)) {
+            //спим вне рабочего времени
             return;
         }
 
-        log.info(" Старт YandexCalendarService");
+        log.info("Старт YandexCalendarService");
         List<CalendarEvent> allEvents = new ArrayList<>();
 
         for (var account : calendarAccounts.getAccounts()) {
