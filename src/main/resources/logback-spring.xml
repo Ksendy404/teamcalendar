@@ -27,14 +27,12 @@
         <property name="LOG_LEVEL_ICAL4J" value="DEBUG"/>
     </springProfile>
 
-    <!-- Консольный аппендер -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- Файловый аппендер -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/${LOG_FILE_NAME}.log</file>
         <encoder>
@@ -44,10 +42,10 @@
             <fileNamePattern>logs/${LOG_FILE_NAME}.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
             <maxHistory>7</maxHistory>
             <totalSizeCap>100MB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>
     </appender>
 
-    <!-- Отдельный аппендер для календарных событий -->
     <appender name="CALENDAR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/calendar.log</file>
         <encoder>
@@ -56,10 +54,10 @@
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <fileNamePattern>logs/calendar.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
             <maxHistory>30</maxHistory>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>
     </appender>
 
-    <!-- Логгеры для календарных сервисов -->
     <logger name="com.teamHelper.calendar" level="${LOG_LEVEL_CALENDAR}" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="CALENDAR_FILE"/>
@@ -69,21 +67,16 @@
     <logger name="org.apache.http" level="${LOG_LEVEL_HTTP}"/>
     <logger name="net.fortuna.ical4j" level="${LOG_LEVEL_ICAL4J}"/>
 
-    <!-- Снижаем уровень для Spring и HTTP клиентов -->
     <logger name="org.springframework" level="WARN"/>
     <logger name="org.apache.http" level="WARN"/>
-
-    <!-- Отключаем debug логи для внешних библиотек -->
     <logger name="net.fortuna.ical4j" level="WARN"/>
     <logger name="org.apache.commons" level="WARN"/>
 
-    <!-- Для дебага можно временно включить -->
     <springProfile name="debug">
         <logger name="com.teamHelper.calendar" level="DEBUG"/>
         <logger name="org.apache.http.wire" level="DEBUG"/>
     </springProfile>
 
-    <!-- Корневой логгер -->
     <root level="${LOG_LEVEL_ROOT}">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
