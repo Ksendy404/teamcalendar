@@ -10,7 +10,7 @@ TELEGRAM_BOT_ADMIN_CHAT_ID=
 TELEGRAM_BOT_ERROR_CHAT_ID=
 
 # Доступ к Яндекс.Календарю (общий логин/пароль)
-CALDAV_USERNAME=itTeamHelper@yandex.com
+CALDAV_USERNAME= 
 CALDAV_PASS=мой_пароль
 
 # Количество календарей
@@ -18,13 +18,13 @@ CALENDAR_COUNT=2
 
 # Первый календарь (уникальный только URL + чат)
 CALENDAR_1_ID=team-events
-CALENDAR_1_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-32878960/
-CALENDAR_1_CHAT_ID=-1001234567890
+CALENDAR_1_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-11111/
+CALENDAR_1_CHAT_ID=-222222222
 
 # Второй календарь
 CALENDAR_2_ID=project-deadlines
-CALENDAR_2_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-98231298/
-CALENDAR_2_CHAT_ID=-1009876543210
+CALENDAR_2_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-22222/
+CALENDAR_2_CHAT_ID=-111111111
 ```
 
 Для запуска локально используйте 
