@@ -87,25 +87,6 @@ public class BotComponent extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            handleIncomingMessage(update);
-        }
-    }
-
-    private void handleIncomingMessage(Update update) {
-        String messageText = update.getMessage().getText();
-        long chatId = update.getMessage().getChatId();
-
-        String helpText = """
-                Я маленький и такой команды пока что не знаю.
-                Доступные команды:
-                /start — приветствие
-                """;
-
-        switch (messageText) {
-            case "/start" -> sendResponse(chatId, "Привет! Я напоминаю о событиях календаря команде.");
-            default -> sendResponse(chatId, helpText);
-        }
     }
 
     private void sendResponse(long chatId, String text) {
