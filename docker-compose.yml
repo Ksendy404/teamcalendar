@@ -8,14 +8,15 @@ services:
     env_file:
       - .env
     volumes:
-      # Оставляем только логи если нужно
       - ./logs:/app/logs
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
-    # Если нужен веб-интерфейс
-    # ports:
-    #   - "8080:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
     networks:
       - bot-network
 
