@@ -14,10 +14,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.teamHelper.calendar.CalendarConstants.WORK_END;
 import static com.teamHelper.calendar.CalendarConstants.WORK_START;
@@ -30,8 +29,7 @@ public class YandexCalendarService {
     private final CalendarAccountsProperties calendarAccounts;
     private final YandexCalDavService calDavService;
     private final BotComponent bot;
-    private final List<CalendarEvent> cachedEvents = new CopyOnWriteArrayList<>();
-    private final Set<String> sentEvents = new HashSet<>();
+    private final Map<String, LocalDateTime> sentEventTimestamps = new ConcurrentHashMap<>();
 
     @Scheduled(cron = "0 * * * * *") // Каждую минуту
     public void updateCalendar() {
@@ -55,8 +53,11 @@ public class YandexCalendarService {
 
                 todayEvents.forEach(event -> {
                     if (shouldSendNotification(event)) {
-                        bot.sendCalendarNotification(event, account.getTelegramChatId());
-                        sentEvents.add(event.getId());
+                        String key = event.getId() + "_" + event.getStart();
+                        if (!sentEventTimestamps.containsKey(key)) {
+                            bot.sendCalendarNotification(event, account.getTelegramChatId());
+                            sentEventTimestamps.put(key, event.getStart());
+                        }
                     }
                 });
 
@@ -67,17 +68,15 @@ public class YandexCalendarService {
             }
         }
 
-        cachedEvents.clear();
-        cachedEvents.addAll(allEvents);
-
         log.info("♻️ Календарь обновлён: {} событий", allEvents.size());
     }
 
     private boolean shouldSendNotification(CalendarEvent event) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime inFiveMinutes = now.plusMinutes(5);
+        String key = event.getId() + "_" + event.getStart();
 
-        return !sentEvents.contains(event.getId())
+        return !sentEventTimestamps.containsKey(key)
                 && event.getStart().isAfter(now)
                 && event.getStart().isBefore(inFiveMinutes);
     }
@@ -110,8 +109,11 @@ public class YandexCalendarService {
                 log.info("Пропущено {} событий из календаря {}", missed.size(), account.getId());
 
                 missed.forEach(event -> {
-                    bot.sendCalendarNotification(event, account.getTelegramChatId());
-                    sentEvents.add(event.getId());
+                    String key = event.getId() + "_" + event.getStart();
+                    if (!sentEventTimestamps.containsKey(key)) {
+                        bot.sendCalendarNotification(event, account.getTelegramChatId());
+                        sentEventTimestamps.put(key, event.getStart());
+                    }
                 });
 
             } catch (Exception e) {
@@ -120,10 +122,9 @@ public class YandexCalendarService {
         });
     }
 
-    @Scheduled(cron = "0 0 0 * * *")
-    public void clearCache() {
-        log.info("🧹 Очистка кэша календаря и сброс отправленных событий");
-        cachedEvents.clear();
-        sentEvents.clear();
+    @Scheduled(cron = "0 0 0 * * *")  // Каждый день в полночь
+    public void cleanupSentEvents() {
+        LocalDateTime threshold = LocalDateTime.now().minusDays(1);
+        sentEventTimestamps.entrySet().removeIf(entry -> entry.getValue().isBefore(threshold));
     }
 }
