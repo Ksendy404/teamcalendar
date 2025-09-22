@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +54,7 @@ public class YandexCalendarService {
 
                 todayEvents.forEach(event -> {
                     if (shouldSendNotification(event)) {
-                        String key = event.getId() + "_" + event.getStart();
+                        String key = event.getId() + "_" + event.getStart().truncatedTo(ChronoUnit.MINUTES);
                         if (!sentEventTimestamps.containsKey(key)) {
                             bot.sendCalendarNotification(event, account.getTelegramChatId());
                             sentEventTimestamps.put(key, event.getStart());
@@ -74,7 +75,7 @@ public class YandexCalendarService {
     private boolean shouldSendNotification(CalendarEvent event) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime inFiveMinutes = now.plusMinutes(5);
-        String key = event.getId() + "_" + event.getStart();
+        String key = event.getId() + "_" + event.getStart().truncatedTo(ChronoUnit.MINUTES);
 
         return !sentEventTimestamps.containsKey(key)
                 && event.getStart().isAfter(now)
@@ -109,7 +110,7 @@ public class YandexCalendarService {
                 log.info("Пропущено {} событий из календаря {}", missed.size(), account.getId());
 
                 missed.forEach(event -> {
-                    String key = event.getId() + "_" + event.getStart();
+                    String key = event.getId() + "_" + event.getStart().truncatedTo(ChronoUnit.MINUTES);
                     if (!sentEventTimestamps.containsKey(key)) {
                         bot.sendCalendarNotification(event, account.getTelegramChatId());
                         sentEventTimestamps.put(key, event.getStart());
