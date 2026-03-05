@@ -69,7 +69,7 @@ public class YandexCalendarService {
             }
         }
 
-        log.info("♻️ Календарь обновлён: {} событий", allEvents.size());
+        log.info("Календарь обновлён: {} событий", allEvents.size());
     }
 
     private boolean shouldSendNotification(CalendarEvent event) {

@@ -6,11 +6,9 @@ import com.teamHelper.config.HttpReport;
 import com.teamHelper.model.CalendarEvent;
 import jakarta.annotation.PreDestroy;
 import net.fortuna.ical4j.data.CalendarBuilder;
-import net.fortuna.ical4j.model.Calendar;
-import net.fortuna.ical4j.model.Component;
-import net.fortuna.ical4j.model.PeriodList;
-import net.fortuna.ical4j.model.Property;
+import net.fortuna.ical4j.model.*;
 import net.fortuna.ical4j.model.component.VEvent;
+import net.fortuna.ical4j.model.property.RecurrenceId;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -44,8 +42,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class YandexCalDavService {
@@ -183,32 +182,62 @@ public class YandexCalDavService {
         List<CalendarEvent> expandedEvents = new ArrayList<>();
 
         ZoneId zoneId = ZoneId.of("Europe/Moscow");
-        net.fortuna.ical4j.model.DateTime icalStart = new net.fortuna.ical4j.model.DateTime(
-                Date.from(periodStart.atZone(zoneId).toInstant()));
-        net.fortuna.ical4j.model.DateTime icalEnd = new net.fortuna.ical4j.model.DateTime(
-                Date.from(periodEnd.atZone(zoneId).toInstant()));
+        DateTime icalStart = new DateTime(Date.from(periodStart.atZone(zoneId).toInstant()));
+        DateTime icalEnd = new DateTime(Date.from(periodEnd.atZone(zoneId).toInstant()));
+        Period period = new Period(icalStart, icalEnd);
 
-        net.fortuna.ical4j.model.Period period = new net.fortuna.ical4j.model.Period(icalStart, icalEnd);
+        Map<String, VEvent> overrideMap = new HashMap<>();
+        for (Object component : calendar.getComponents(Component.VEVENT)) {
+            VEvent vEvent = (VEvent) component;
+            // Ищем события с RECURRENCE-ID – это перенесённые/изменённые экземпляры
+            if (vEvent.getProperty(Property.RECURRENCE_ID) != null) {
+                RecurrenceId recId = (RecurrenceId) vEvent.getProperty(Property.RECURRENCE_ID);
+                java.util.Date recDate = recId.getDate();
+                if (recDate != null) {
+                    String baseUid = vEvent.getUid().getValue();
+                    String key = baseUid + "_" + recDate.getTime();
+                    overrideMap.put(key, vEvent);
+                }
+                // Добавляем переопределённое событие как отдельное
+                try {
+                    CalendarEvent overrideEvent = convertEvent(vEvent);
+                    expandedEvents.add(overrideEvent);
+                } catch (Exception e) {
+                    log.warn("Ошибка конвертации переопределённого события '{}': {}",
+                            vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия",
+                            e.getMessage());
+                }
+            }
+        }
 
+        // Теперь обрабатываем все события, включая повторяющиеся (без RECURRENCE-ID)
         for (Object component : calendar.getComponents(Component.VEVENT)) {
             VEvent vEvent = (VEvent) component;
 
+            // Пропускаем переопределённые события
+            if (vEvent.getProperty(Property.RECURRENCE_ID) != null) {
+                continue;
+            }
+
             try {
-                // Проверяем, есть ли правило повторения
+                // Если есть правило повторения, разворачиваем его
                 if (vEvent.getProperty(Property.RRULE) != null) {
-                    // Повторяющееся событие - логируем только в DEBUG
                     if (log.isDebugEnabled()) {
                         log.debug("Разворачиваем повторяющееся событие: '{}'",
                                 vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия");
                     }
-
                     // Получаем все экземпляры события в указанном периоде
                     PeriodList periodList = vEvent.calculateRecurrenceSet(period);
-
                     for (Object periodObj : periodList) {
-                        net.fortuna.ical4j.model.Period eventPeriod = (net.fortuna.ical4j.model.Period) periodObj;
-
-                        // Создаем копию события для каждого повторения
+                        Period eventPeriod = (Period) periodObj;
+                        // Проверяем, не переопределён ли этот экземпляр
+                        String overrideKey = vEvent.getUid().getValue() + "_" +
+                                ((DateTime) eventPeriod.getStart()).getTime();
+                        if (overrideMap.containsKey(overrideKey)) {
+                            // Этот экземпляр заменён событием с RECURRENCE-ID, пропускаем оригинал
+                            continue;
+                        }
+                        // Создаём копию события для каждого повторения
                         CalendarEvent expandedEvent = convertEventWithCustomTime(
                                 vEvent,
                                 eventPeriod.getStart(),
@@ -216,7 +245,7 @@ public class YandexCalDavService {
                         expandedEvents.add(expandedEvent);
                     }
                 } else {
-                    // Обычное событие без повторений
+                    // Обычное событие без повторений (и без RECURRENCE-ID)
                     CalendarEvent singleEvent = convertEvent(vEvent);
                     expandedEvents.add(singleEvent);
                 }
@@ -224,7 +253,6 @@ public class YandexCalDavService {
                 log.warn("Ошибка разворачивания события '{}': {}",
                         vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия",
                         e.getMessage());
-
                 // В случае ошибки добавляем событие как обычное
                 try {
                     CalendarEvent fallbackEvent = convertEvent(vEvent);
@@ -238,8 +266,8 @@ public class YandexCalDavService {
         return expandedEvents;
     }
 
-    private CalendarEvent convertEventWithCustomTime(VEvent vEvent, net.fortuna.ical4j.model.DateTime startTime,
-                                                     net.fortuna.ical4j.model.DateTime endTime) {
+    private CalendarEvent convertEventWithCustomTime(VEvent vEvent, DateTime startTime,
+                                                     DateTime endTime) {
         ZoneId serverZone = ZoneId.of("Europe/Moscow");
 
         String title = vEvent.getSummary() != null ? vEvent.getSummary().getValue() : "Без названия";
