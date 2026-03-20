@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-
   telegram-bot:
     build: .
     container_name: telegram-calendar-bot
