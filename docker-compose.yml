@@ -7,25 +7,27 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    command: >
-      sh -c '
-      cat > /tmp/3proxy.cfg <<EOF
-      nserver 1.1.1.1
-      nserver 8.8.8.8
-      nscache 65536
-      
-      timeouts 1 5 30 60 180 1800 15 60
-      log stdout
-      
-      auth none
-      allow *
-      
-      parent 1000 http ${PROXY_HOST} ${PROXY_PORT} ${PROXY_USER} ${PROXY_PASSWORD}
-      proxy -p8888
-      flush
-      EOF
-      /usr/bin/3proxy /tmp/3proxy.cfg
-      '
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/3proxy.cfg <<EOF
+        nserver 1.1.1.1
+        nserver 8.8.8.8
+        nscache 65536
+
+        timeouts 1 5 30 60 180 1800 15 60
+        log stdout
+
+        auth none
+        allow *
+
+        parent 1000 http ${PROXY_HOST} ${PROXY_PORT} ${PROXY_USER} ${PROXY_PASSWORD}
+        proxy -p8888
+        flush
+        EOF
+
+        exec /usr/bin/3proxy /tmp/3proxy.cfg
     networks:
       - bot-network
 
