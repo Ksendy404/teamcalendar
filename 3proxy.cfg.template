@@ -1,0 +1,13 @@
+nserver 1.1.1.1
+nserver 8.8.8.8
+nscache 65536
+
+timeouts 1 5 30 60 180 1800 15 60
+log stdout
+
+auth none
+allow *
+
+parent 1000 http ${PROXY_HOST} ${PROXY_PORT} ${PROXY_USER} ${PROXY_PASSWORD}
+proxy -p8888
+flush

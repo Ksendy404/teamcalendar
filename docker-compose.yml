@@ -1,10 +1,29 @@
 version: '3.8'
 
 services:
+  local-proxy:
+    image: alpine:3.19
+    container_name: local-proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./3proxy.cfg.template:/3proxy.cfg.template
+    command: >
+      sh -c "
+      apk add --no-cache 3proxy gettext &&
+      envsubst < /3proxy.cfg.template > /etc/3proxy.cfg &&
+      3proxy /etc/3proxy.cfg
+      "
+    networks:
+      - bot-network
+
   telegram-bot:
     build: .
     container_name: telegram-calendar-bot
     restart: unless-stopped
+    depends_on:
+      - local-proxy
     env_file:
       - .env
     volumes:
@@ -12,8 +31,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
-
-      - JAVA_TOOL_OPTIONS=-Djava.net.useSystemProxies=true -DproxySet=true -Dhttp.proxyHost=${PROXY_HOST} -Dhttp.proxyPort=${PROXY_PORT} -Dhttp.proxyUser=${PROXY_USER} -Dhttp.proxyPassword=${PROXY_PASSWORD} -Dhttps.proxyHost=${PROXY_HOST} -Dhttps.proxyPort=${PROXY_PORT} -Dhttps.proxyUser=${PROXY_USER} -Dhttps.proxyPassword=${PROXY_PASSWORD} -Djdk.http.auth.tunneling.disabledSchemes="" -Djdk.http.auth.proxying.disabledSchemes="" -Dhttp.nonProxyHosts=localhost|127.0.0.1
+      - JAVA_TOOL_OPTIONS=-Djava.net.useSystemProxies=true -DproxySet=true -Dhttp.proxyHost=local-proxy -Dhttp.proxyPort=8888 -Dhttps.proxyHost=local-proxy -Dhttps.proxyPort=8888 -Dhttp.nonProxyHosts=localhost|127.0.0.1
     logging:
       driver: "json-file"
       options:
