@@ -11,6 +11,7 @@ services:
       PROXY_PORT: 3128
       LOG_OUTPUT: /dev/stdout
       EXTRA_CONFIG: |
+        allow *
         parent 1000 http ${PROXY_HOST} ${PROXY_PORT} ${PROXY_USER} ${PROXY_PASSWORD}
     networks:
       - bot-network
