@@ -2,18 +2,17 @@ version: '3.8'
 
 services:
   local-proxy:
-    image: alpine:3.19
+    image: ghcr.io/tarampampam/3proxy:latest
     container_name: local-proxy
     restart: unless-stopped
     env_file:
       - .env
     volumes:
-      - ./3proxy.cfg.template:/3proxy.cfg.template
+      - ./3proxy.cfg.template:/3proxy.cfg.template:ro
     command: >
       sh -c "
-      apk add --no-cache 3proxy gettext &&
-      envsubst < /3proxy.cfg.template > /etc/3proxy.cfg &&
-      3proxy /etc/3proxy.cfg
+      envsubst < /3proxy.cfg.template > /tmp/3proxy.cfg &&
+      /usr/bin/3proxy /tmp/3proxy.cfg
       "
     networks:
       - bot-network
