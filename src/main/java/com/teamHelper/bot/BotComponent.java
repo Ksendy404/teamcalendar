@@ -50,7 +50,7 @@ public class BotComponent extends TelegramLongPollingBot {
             api.registerBot(this);
             log.info("Бот зарегистрирован в Telegram API");
         } catch (TelegramApiException e) {
-            log.error("Ошибка регистрации бота: {}", e.getMessage());
+            log.error("Ошибка регистрации бота", e);
         }
     }
 

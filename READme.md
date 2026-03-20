@@ -25,6 +25,12 @@ CALENDAR_1_CHAT_ID=-222222222
 CALENDAR_2_ID=project-deadlines
 CALENDAR_2_URL=https://caldav.yandex.ru/calendars/itTeamHelper@yandex.com/events-22222/
 CALENDAR_2_CHAT_ID=-111111111
+
+# Прокси
+PROXY_HOST=
+PROXY_PORT=
+PROXY_USER=
+PROXY_PASSWORD=
 ```
 
 Для запуска локально используйте 
