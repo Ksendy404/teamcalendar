@@ -29,7 +29,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
-      - JAVA_TOOL_OPTIONS=-Dhttp.proxyHost=local-proxy -Dhttp.proxyPort=8888 -Dhttps.proxyHost=local-proxy -Dhttps.proxyPort=8888 -Dhttp.nonProxyHosts=localhost|127.0.0.1
+      - JAVA_TOOL_OPTIONS=-Djava.net.useSystemProxies=false -Dhttp.proxyHost=local-proxy -Dhttp.proxyPort=8888 -Dhttps.proxyHost=local-proxy -Dhttps.proxyPort=8888 -Dhttp.nonProxyHosts=localhost|127.0.0.1|local-proxy
     logging:
       driver: "json-file"
       options:
