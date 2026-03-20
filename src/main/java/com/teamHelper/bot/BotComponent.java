@@ -1,7 +1,9 @@
 package com.teamHelper.bot;
 
 import com.teamHelper.model.CalendarEvent;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Credentials;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -12,9 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.net.Authenticator;
 import java.net.InetSocketAddress;
-import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.time.Duration;
 
@@ -31,9 +31,6 @@ public class BotComponent {
     @Value("${TELEGRAM_BOT_ERROR_CHAT_ID:}")
     private String errorChatId;
 
-    @Value("${PROXY_TYPE:}")
-    private String proxyType;
-
     @Value("${PROXY_HOST:}")
     private String proxyHost;
 
@@ -48,7 +45,7 @@ public class BotComponent {
 
     private OkHttpClient client;
 
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     public void init() {
         this.client = buildHttpClient();
         log.info("Bot sender initialized");
@@ -61,19 +58,15 @@ public class BotComponent {
                 .writeTimeout(Duration.ofSeconds(30));
 
         if (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0) {
-            Proxy.Type type = Proxy.Type.HTTP;
-
-            builder.proxy(new Proxy(type, new InetSocketAddress(proxyHost, proxyPort)));
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+            builder.proxy(proxy);
 
             if (proxyUser != null && !proxyUser.isBlank()) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        if (getRequestingHost().equalsIgnoreCase(proxyHost) && getRequestingPort() == proxyPort) {
-                            return new PasswordAuthentication(proxyUser, proxyPassword.toCharArray());
-                        }
-                        return null;
-                    }
+                builder.proxyAuthenticator((route, response) -> {
+                    String credential = Credentials.basic(proxyUser, proxyPassword);
+                    return response.request().newBuilder()
+                            .header("Proxy-Authorization", credential)
+                            .build();
                 });
             }
         }
@@ -82,8 +75,8 @@ public class BotComponent {
     }
 
     public void sendCalendarNotification(CalendarEvent event, Long chatId) {
-        String text = messageBuilder.buildEventMessage(event);
         try {
+            String text = messageBuilder.buildEventMessage(event);
             sendMessage(chatId.toString(), text);
         } catch (Exception e) {
             log.error("Ошибка отправки уведомления", e);
@@ -95,6 +88,7 @@ public class BotComponent {
         if (errorChatId == null || errorChatId.isBlank()) {
             return;
         }
+
         try {
             sendMessage(errorChatId, text);
         } catch (Exception e) {
