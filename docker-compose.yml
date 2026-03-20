@@ -12,7 +12,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
-      - JAVA_TOOL_OPTIONS=-DsocksProxyHost=${PROXY_HOST} -DsocksProxyPort=${PROXY_PORT} -Djava.net.socks.username=${PROXY_USER} -Djava.net.socks.password=${PROXY_PASSWORD}
+      - JAVA_TOOL_OPTIONS=-Dhttp.proxyHost=${PROXY_HOST} -Dhttp.proxyPort=${PROXY_PORT} -Dhttp.proxyUser=${PROXY_USER} -Dhttp.proxyPassword=${PROXY_PASSWORD} -Dhttps.proxyHost=${PROXY_HOST} -Dhttps.proxyPort=${PROXY_PORT} -Dhttps.proxyUser=${PROXY_USER} -Dhttps.proxyPassword=${PROXY_PASSWORD}
     logging:
       driver: "json-file"
       options:
