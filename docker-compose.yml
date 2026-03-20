@@ -1,20 +1,6 @@
 version: '3.8'
 
 services:
-  local-proxy:
-    image: ghcr.io/tarampampam/3proxy:1
-    container_name: local-proxy
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PROXY_PORT: 8888
-      LOG_OUTPUT: /dev/stdout
-      EXTRA_CONFIG: |
-        allow *
-        parent 1000 http ${PROXY_HOST} ${PROXY_PORT} ${PROXY_USER} ${PROXY_PASSWORD}
-    networks:
-      - bot-network
 
   telegram-bot:
     build: .
@@ -29,7 +15,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
-      - JAVA_TOOL_OPTIONS=-Djava.net.useSystemProxies=false -Dhttp.proxyHost=local-proxy -Dhttp.proxyPort=8888 -Dhttps.proxyHost=local-proxy -Dhttps.proxyPort=8888 -Dhttp.nonProxyHosts=localhost|127.0.0.1|local-proxy
     logging:
       driver: "json-file"
       options:

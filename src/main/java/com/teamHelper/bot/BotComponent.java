@@ -1,103 +1,126 @@
 package com.teamHelper.bot;
 
 import com.teamHelper.model.CalendarEvent;
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.TelegramBotsApi;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
+import java.io.IOException;
+import java.net.Authenticator;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
+import java.net.Proxy;
+import java.time.Duration;
+
+@Slf4j
 @Component
-public class BotComponent extends TelegramLongPollingBot {
-
-    private static final Logger log = LoggerFactory.getLogger(BotComponent.class);
+public class BotComponent {
 
     @Autowired
     private MessageBuilder messageBuilder;
 
-    @Value("${TELEGRAM_BOT_USERNAME}")
-    private String botUsername;
-
     @Value("${TELEGRAM_BOT_TOKEN}")
     private String botToken;
 
-    @Value("${TELEGRAM_BOT_ADMIN_CHAT_ID}")
-    private String adminChatId;
-
-    @Value("${TELEGRAM_BOT_ERROR_CHAT_ID}")
+    @Value("${TELEGRAM_BOT_ERROR_CHAT_ID:}")
     private String errorChatId;
 
-    public BotComponent(@Value("${telegram.bot.token:}") String botToken) {
-        super(botToken);
-        if (botToken != null && botToken.length() >= 6) {
-            System.out.println("🟢 Бот инициализирован. Токен: " + botToken.substring(0, 6) + "...");
-        } else {
-            System.out.println("Бот инициализирован. Токен не задан или слишком короткий");
+    @Value("${PROXY_TYPE:}")
+    private String proxyType;
+
+    @Value("${PROXY_HOST:}")
+    private String proxyHost;
+
+    @Value("${PROXY_PORT:0}")
+    private int proxyPort;
+
+    @Value("${PROXY_USER:}")
+    private String proxyUser;
+
+    @Value("${PROXY_PASSWORD:}")
+    private String proxyPassword;
+
+    private OkHttpClient client;
+
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        this.client = buildHttpClient();
+        log.info("Bot sender initialized");
+    }
+
+    private OkHttpClient buildHttpClient() {
+        OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .readTimeout(Duration.ofSeconds(30))
+                .writeTimeout(Duration.ofSeconds(30));
+
+        if (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0) {
+            Proxy.Type type = Proxy.Type.HTTP;
+
+            builder.proxy(new Proxy(type, new InetSocketAddress(proxyHost, proxyPort)));
+
+            if (proxyUser != null && !proxyUser.isBlank()) {
+                Authenticator.setDefault(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        if (getRequestingHost().equalsIgnoreCase(proxyHost) && getRequestingPort() == proxyPort) {
+                            return new PasswordAuthentication(proxyUser, proxyPassword.toCharArray());
+                        }
+                        return null;
+                    }
+                });
+            }
         }
+
+        return builder.build();
     }
 
-    @PostConstruct
-    public void register() {
-        try {
-            TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
-            api.registerBot(this);
-            log.info("Бот зарегистрирован в Telegram API");
-        } catch (TelegramApiException e) {
-            log.error("Ошибка регистрации бота", e);
-        }
-    }
-
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    /**
-     * Метод для отправки уведомлений в нужный чат
-     */
     public void sendCalendarNotification(CalendarEvent event, Long chatId) {
+        String text = messageBuilder.buildEventMessage(event);
         try {
-            String text = messageBuilder.buildEventMessage(event);
-            SendMessage message = new SendMessage(chatId.toString(), text);
-            message.enableHtml(true);
-            message.setParseMode("MarkdownV2");
-            execute(message);
-        } catch (TelegramApiException e) {
+            sendMessage(chatId.toString(), text);
+        } catch (Exception e) {
+            log.error("Ошибка отправки уведомления", e);
             sendErrorMessage("Ошибка отправки уведомления: " + e.getMessage());
         }
     }
 
     public void sendErrorMessage(String text) {
-        if (errorChatId != null) {
-            try {
-                SendMessage message = new SendMessage(errorChatId, text);
-                execute(message);
-            } catch (TelegramApiException e) {
-                System.err.println("Ошибка при отправке сообщения в чат ошибок: " + e.getMessage());
-            }
+        if (errorChatId == null || errorChatId.isBlank()) {
+            return;
+        }
+        try {
+            sendMessage(errorChatId, text);
+        } catch (Exception e) {
+            log.error("Ошибка при отправке в error chat", e);
         }
     }
 
-    @Override
-    public void onUpdateReceived(Update update) {
-    }
+    public void sendMessage(String chatId, String text) throws IOException {
+        String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
 
-    private void sendResponse(long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(text);
+        RequestBody body = new FormBody.Builder()
+                .add("chat_id", chatId)
+                .add("text", text)
+                .add("parse_mode", "MarkdownV2")
+                .build();
 
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Ошибка отправки ответа: {}", e.getMessage());
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
+                throw new IOException("Telegram API error: HTTP " + response.code() + ", body=" + responseBody);
+            }
         }
     }
 }
