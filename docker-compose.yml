@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     environment:
-      PROXY_PORT: 3128
+      PROXY_PORT: 8888
       LOG_OUTPUT: /dev/stdout
       EXTRA_CONFIG: |
         allow *
@@ -29,7 +29,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
-        - JAVA_TOOL_OPTIONS=-Dhttp.proxyHost=local-proxy -Dhttp.proxyPort=3128 -Dhttps.proxyHost=local-proxy -Dhttps.proxyPort=3128 -Dhttp.nonProxyHosts=localhost|127.0.0.1
+      - JAVA_TOOL_OPTIONS=-Dhttp.proxyHost=local-proxy -Dhttp.proxyPort=8888 -Dhttps.proxyHost=local-proxy -Dhttps.proxyPort=8888 -Dhttp.nonProxyHosts=localhost|127.0.0.1
     logging:
       driver: "json-file"
       options:
