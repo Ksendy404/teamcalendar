@@ -10,6 +10,7 @@ services:
     volumes:
       - ./logs:/app/logs
     environment:
+      - JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv6Addresses=false
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Europe/Moscow
     logging:
