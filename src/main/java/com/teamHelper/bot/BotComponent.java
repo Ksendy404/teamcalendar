@@ -120,7 +120,7 @@ public class BotComponent {
     }
 
     public void sendMessage(String chatId, String text) throws IOException {
-        log.info("Telegram sendMessage chatId=[{}]", chatId);
+        log.error("Telegram sendMessage chatId=[{}]", chatId);
 
         String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
 
