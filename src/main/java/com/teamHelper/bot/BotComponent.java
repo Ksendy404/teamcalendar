@@ -110,12 +110,14 @@ public class BotComponent {
             sendMessage(errorChatId, text);
         } catch (Exception e) {
             log.error("Ошибка при отправке в error chat Telegram", e);
+            log.info("Telegram sendMessage chatId=[{}]", errorChatId);
         }
 
         try {
             sendMessageToMattermost(errorChatIdMm, text);
         } catch (Exception e) {
             log.error("Ошибка при отправке в error chat Mattermost", e);
+            log.info("Telegram sendMessage chatId=[{}]", errorChatId);
         }
     }
 
