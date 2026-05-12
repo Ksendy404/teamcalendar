@@ -24,6 +24,6 @@ public class MessageBuilder {
 
     public String escapeMarkdownV2(String text) {
         if (text == null) return "";
-        return text.replaceAll("([_\\\\*\\[\\]()~`>#+=|{}.!])", "\\\\$1");
+        return text.replaceAll("([_\\\\*\\[\\]()~`>#+\\-=|{}.!])", "\\\\$1");
     }
 }
