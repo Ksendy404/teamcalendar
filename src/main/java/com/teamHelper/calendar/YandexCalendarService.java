@@ -56,7 +56,7 @@ public class YandexCalendarService {
                     if (shouldSendNotification(event)) {
                         String key = event.getId() + "_" + event.getStart().truncatedTo(ChronoUnit.MINUTES);
                         if (!sentEventTimestamps.containsKey(key)) {
-                            bot.sendCalendarNotification(event, account.getTelegramChatId());
+                            bot.sendCalendarNotification(event, account.getTelegramChatId(), account.getMmChatId());
                             sentEventTimestamps.put(key, event.getStart());
                         }
                     }
@@ -112,7 +112,7 @@ public class YandexCalendarService {
                 missed.forEach(event -> {
                     String key = event.getId() + "_" + event.getStart().truncatedTo(ChronoUnit.MINUTES);
                     if (!sentEventTimestamps.containsKey(key)) {
-                        bot.sendCalendarNotification(event, account.getTelegramChatId());
+                        bot.sendCalendarNotification(event, account.getTelegramChatId(),  account.getMmChatId());
                         sentEventTimestamps.put(key, event.getStart());
                     }
                 });

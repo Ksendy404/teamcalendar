@@ -7,4 +7,5 @@ public class CalendarAccountConfig {
     private final String id;
     private final String url;
     private final Long telegramChatId;
+    private final String mmChatId;
 }

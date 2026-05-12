@@ -24,4 +24,19 @@ public class BotConfig {
 
     @Value("${TELEGRAM_BOT_NOTIFICATION_CHAT_ID:}")
     private String defaultNotificationChatId;
+
+    @Value("${MM_URL}")
+    private String mmUrl;
+
+    @Value("${MM_BOT_TOKEN}")
+    private String mmToken;
+
+    @Value("${MM_BOT_ADMIN_CHAT_ID}")
+    private String adminChatIdMm;
+
+    @Value("${MM_BOT_ERROR_CHAT_ID}")
+    private String errorChatIdMm;
+
+    @Value("${MM_BOT_NOTIFICATION_CHAT_ID:}")
+    private String defaultNotificationChatIdMm;
 }

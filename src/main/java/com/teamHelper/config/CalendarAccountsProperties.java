@@ -24,8 +24,9 @@ public class CalendarAccountsProperties {
             String id = System.getenv("CALENDAR_" + i + "_ID");
             String url = System.getenv("CALENDAR_" + i + "_URL");
             String chatIdStr = System.getenv("CALENDAR_" + i + "_CHAT_ID");
+            String mmChatIdStr = System.getenv("CALENDAR_" + i + "_CHAT_ID_MM");
 
-            if (id == null || url == null || chatIdStr == null) {
+            if (id == null || url == null || chatIdStr == null  || mmChatIdStr == null) {
                 log.warn("⚠️ Пропущена конфигурация календаря #{}", i);
                 continue;
             }
@@ -38,10 +39,10 @@ public class CalendarAccountsProperties {
                 continue;
             }
 
-            CalendarAccountConfig config = new CalendarAccountConfig(id, url, chatId);
+            CalendarAccountConfig config = new CalendarAccountConfig(id, url, chatId, mmChatIdStr);
             accounts.add(config);
 
-            log.info("✅ Загружена конфигурация календаря {} → чат {}", id, chatId);
+            log.info("✅ Загружена конфигурация календаря {} → чат {} и {}", id, chatId, mmChatIdStr);
         }
     }
 }

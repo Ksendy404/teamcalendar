@@ -1,14 +1,10 @@
 package com.teamHelper.bot;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teamHelper.model.CalendarEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Credentials;
-import okhttp3.FormBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,6 +13,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -28,8 +26,17 @@ public class BotComponent {
     @Value("${TELEGRAM_BOT_TOKEN}")
     private String botToken;
 
+    @Value("${MM_URL}")
+    private String mmUrl;
+
+    @Value("${MM_BOT_TOKEN}")
+    private String mmToken;
+
     @Value("${TELEGRAM_BOT_ERROR_CHAT_ID:}")
     private String errorChatId;
+
+    @Value("${MM_BOT_ERROR_CHAT_ID:}")
+    private String errorChatIdMm;
 
     @Value("${PROXY_HOST:}")
     private String proxyHost;
@@ -44,6 +51,8 @@ public class BotComponent {
     private String proxyPassword;
 
     private OkHttpClient client;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostConstruct
     public void init() {
@@ -74,25 +83,39 @@ public class BotComponent {
         return builder.build();
     }
 
-    public void sendCalendarNotification(CalendarEvent event, Long chatId) {
+    public void sendCalendarNotification(CalendarEvent event, Long chatId, String mmChatId) {
         try {
             String text = messageBuilder.buildEventMessage(event);
             sendMessage(chatId.toString(), text);
         } catch (Exception e) {
-            log.error("Ошибка отправки уведомления", e);
-            sendErrorMessage("Ошибка отправки уведомления: " + e.getMessage());
+            log.error("Ошибка отправки уведомления в Telegram", e);
+            sendErrorMessage("Ошибка отправки уведомления в Telegram: " + e.getMessage());
+        }
+
+        try {
+            String text = messageBuilder.buildEventMessage(event);
+            sendMessageToMattermost(mmChatId, text);
+        } catch (Exception e) {
+            log.error("Ошибка отправки уведомления в Mattermost", e);
+            sendErrorMessage("Ошибка отправки уведомления в Mattermost: " + e.getMessage());
         }
     }
 
     public void sendErrorMessage(String text) {
-        if (errorChatId == null || errorChatId.isBlank()) {
+        if (errorChatId == null || errorChatId.isBlank() || errorChatIdMm == null || errorChatIdMm.isBlank()) {
             return;
         }
 
         try {
             sendMessage(errorChatId, text);
         } catch (Exception e) {
-            log.error("Ошибка при отправке в error chat", e);
+            log.error("Ошибка при отправке в error chat Telegram", e);
+        }
+
+        try {
+            sendMessageToMattermost(errorChatIdMm, text);
+        } catch (Exception e) {
+            log.error("Ошибка при отправке в error chat Mattermost", e);
         }
     }
 
@@ -114,6 +137,46 @@ public class BotComponent {
             if (!response.isSuccessful()) {
                 String responseBody = response.body() != null ? response.body().string() : "";
                 throw new IOException("Telegram API error: HTTP " + response.code() + ", body=" + responseBody);
+            }
+        }
+    }
+
+    public void sendMessageToMattermost(String chatId, String text) throws IOException {
+        String url = mmUrl;
+
+        String cleanedText = text
+                .replace("\\=", "=")
+                .replace("\\.", ".")
+                .replace("\\_", "_")
+                .replace("\\*", "*")
+                .replace("\\[", "[")
+                .replace("\\]", "]")
+                .replace("\\(", "(")
+                .replace("\\)", ")")
+                .replace("\\n", "\n  ");
+
+        Map<String, String> payload = new HashMap<>();
+        payload.put("channel_id", chatId);
+        payload.put("message", cleanedText);
+
+        String jsonBody = objectMapper.writeValueAsString(payload);
+
+        RequestBody body = RequestBody.create(
+                jsonBody,
+                MediaType.parse("application/json; charset=utf-8")
+        );
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer " + mmToken)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
+                throw new IOException("Mattermost API error: HTTP " + response.code() + ", body=" + responseBody);
             }
         }
     }
