@@ -89,7 +89,7 @@ public class BotComponent {
             sendMessage(chatId.toString(), text);
         } catch (Exception e) {
             log.error("Ошибка отправки уведомления в Telegram", e);
-            sendErrorMessage("Ошибка отправки уведомления в Telegram: " + e.getMessage());
+            sendErrorMessage("Ошибка отправки уведомления в Telegram: " + e.getMessage() + " в " + chatId);
         }
 
         try {
@@ -110,14 +110,12 @@ public class BotComponent {
             sendMessage(errorChatId, text);
         } catch (Exception e) {
             log.error("Ошибка при отправке в error chat Telegram", e);
-            log.info("Telegram sendMessage chatId=[{}]", errorChatId);
         }
 
         try {
             sendMessageToMattermost(errorChatIdMm, text);
         } catch (Exception e) {
             log.error("Ошибка при отправке в error chat Mattermost", e);
-            log.info("Telegram sendMessage chatId=[{}]", errorChatId);
         }
     }
 
